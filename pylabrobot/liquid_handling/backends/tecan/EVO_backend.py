@@ -268,6 +268,7 @@ class EVOBackend(TecanLiquidHandler):
 
     await super().setup()
 
+    self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
     self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
     self._mca_connected = await self.setup_arm(EVOBackend.MCA)
     self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
@@ -285,6 +286,10 @@ class EVOBackend(TecanLiquidHandler):
     if self.liha_connected:
       self.liha = LiHa(self, EVOBackend.LIHA)
       await self.liha.position_initialization_x()
+
+    if self.pnp_connected:
+      self.pnp = PnP(self, EVOBackend.PNP)
+      await self.pnp.position_initialization_x()
 
     self._num_channels = await self.liha.report_number_tips()
     self._x_range = await self.liha.report_x_param(5)
@@ -320,10 +325,10 @@ class EVOBackend(TecanLiquidHandler):
 
   async def _park_liha(self):
     await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
-    await self.liha.position_absolute_all_axis(45, 1031, 90, [self._z_range] * self.num_channels)
+    await self.liha.position_absolute_all_axis(9241, 793, 90, [self._z_range] * self.num_channels)
 
   async def _park_roma(self):
-    await self.roma.set_vector_coordinate_position(1, 9000, 2000, 2464, 1800, None, 1, 0)
+    await self.roma.set_vector_coordinate_position(1, 14628, 1999, 100, 1800, 900, 1, 0)
     await self.roma.action_move_vector_coordinate_position()
 
   async def _park_mca(self):
@@ -345,6 +350,11 @@ class EVOBackend(TecanLiquidHandler):
     # Stop movement to prevent drifting
     await self.send_command(EVO.MCA, command="BMA", params=[0, 0, 0])
     await asyncio.sleep(0.5)
+
+  async def _park_pnp(self):
+    await self.pnp.set_z_travel_height(self._z_range)
+    await self.pnp.position_absolute_all(-100, -700, z = None, r = 0, g = 280)
+
 
   # ============== LiquidHandlerBackend methods ==============
 
