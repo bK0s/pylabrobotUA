@@ -270,7 +270,7 @@ class EVOBackend(TecanLiquidHandler):
 
     self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
     self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
-    self._mca_connected = await self.setup_arm(EVOBackend.MCA)
+    #self._mca_connected = await self.setup_arm(EVOBackend.MCA)
     self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
 
     if self.roma_connected:  # position_initialization_x in reverse order from setup_arm
@@ -278,10 +278,10 @@ class EVOBackend(TecanLiquidHandler):
       await self.roma.position_initialization_x()
       # move to home position (TBD) after initialization
       await self._park_roma()
-    if self.mca_connected:
+    """if self.mca_connected:
       self.mca = Mca(self, EVO.MCA)
       # await self.mca.position_initialization_x() # function does not work for mca.
-      await self._park_mca()
+      await self._park_mca()"""
 
     if self.liha_connected:
       self.liha = LiHa(self, EVOBackend.LIHA)
@@ -309,7 +309,7 @@ class EVOBackend(TecanLiquidHandler):
 
   async def setup_arm(self, module):
     try:
-      if module == EVO.MCA:
+      if module == EVOBackend.MCA:
         await self.send_command(module, command="PIB")
 
       await self.send_command(module, command="PIA")
@@ -318,7 +318,7 @@ class EVOBackend(TecanLiquidHandler):
         return False
       raise e
 
-    if module != EVO.MCA:
+    if module != EVOBackend.MCA:
       await self.send_command(module, command="BMX", params=[2])
 
     return True
@@ -336,19 +336,19 @@ class EVOBackend(TecanLiquidHandler):
     # TODO CHANGE TO USE CORRECT FUNCTIONS
 
     # Ensure MCA is initialized before moving
-    await self.send_command(EVO.MCA, command="PIA")
+    await self.send_command(EVOBackend.MCA, command="PIA")
     await asyncio.sleep(0.5)
 
     # Raise MCA Z-axis first to avoid collision
-    await self.send_command(EVO.MCA, command="PAA", params=[None, None, 2000])  # Raise Z-axis
+    await self.send_command(EVOBackend.MCA, command="PAA", params=[None, None, 2000])  # Raise Z-axis
     await asyncio.sleep(1)
 
     # Move MCA to parking position (adjust X, Y as needed)
-    await self.send_command(EVO.MCA, command="PAA", params=[6000, 1000, None])
+    await self.send_command(EVOBackend.MCA, command="PAA", params=[6000, 1000, None])
     await asyncio.sleep(1)
 
     # Stop movement to prevent drifting
-    await self.send_command(EVO.MCA, command="BMA", params=[0, 0, 0])
+    await self.send_command(EVOBackend.MCA, command="BMA", params=[0, 0, 0])
     await asyncio.sleep(0.5)
 
   async def _park_pnp(self):
