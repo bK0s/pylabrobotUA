@@ -328,7 +328,7 @@ class EVOBackend(TecanLiquidHandler):
     await self.liha.position_absolute_all_axis(9241, 793, 90, [self._z_range] * self.num_channels)
 
   async def _park_roma(self):
-    await self.roma.set_vector_coordinate_position(1, 14628, 1999, 100, 1800, 900, 1, 0)
+    await self.roma.set_vector_coordinate_position(1, 14628, 1999, 2200, 1800, 900, 1, 0)
     await self.roma.action_move_vector_coordinate_position()
 
   async def _park_mca(self):
