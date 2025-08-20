@@ -52,6 +52,7 @@ from pylabrobot.liquid_handling.utils import (
 from pylabrobot.resources import (
   Carrier,
   Coordinate,
+  Plate,
   Resource,
   Tip,
   TipRack,
@@ -1381,19 +1382,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
       await self.pre_initialize_instrument()
 
     if not initialized or any(tip_presences):
-      dy = (4050 - 2175) // (self.num_channels - 1)
-      y_positions = [4050 - i * dy for i in range(self.num_channels)]
-
-      await self.initialize_pipetting_channels(
-        x_positions=[self.extended_conf["xw"]],  # Tip eject waste X position.
-        y_positions=y_positions,
-        begin_of_tip_deposit_process=int(self._channel_traversal_height * 10),
-        end_of_tip_deposit_process=1220,
-        z_position_at_end_of_a_command=3600,
-        tip_pattern=[True] * self.num_channels,
-        tip_type=4,  # TODO: get from tip types
-        discarding_method=0,
-      )
+      await self.initialize_pip()
 
     if self.autoload_installed and not skip_autoload:
       autoload_initialized = await self.request_autoload_initialization_status()
@@ -2186,9 +2175,10 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     assert isinstance(prototypical_tip, HamiltonTip), "Tip type must be HamiltonTip."
     ttti = await self.get_or_assign_tip_type_index(prototypical_tip)
     position = tip_spot_a1.get_absolute_location() + tip_spot_a1.center() + pickup.offset
+    self._check_96_position_legal(position, skip_z=True)
     z_deposit_position += round(pickup.offset.z * 10)
 
-    x_direction = 0 if position.x > 0 else 1
+    x_direction = 0 if position.x >= 0 else 1
     return await self.pick_up_tips_core96(
       x_position=abs(round(position.x * 10)),
       x_direction=x_direction,
@@ -2218,8 +2208,9 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
       position = tip_spot_a1.get_absolute_location() + tip_spot_a1.center() + drop.offset
     else:
       position = self._position_96_head_in_resource(drop.resource) + drop.offset
+    self._check_96_position_legal(position, skip_z=True)
 
-    x_direction = 0 if position.x > 0 else 1
+    x_direction = 0 if position.x >= 0 else 1
     return await self.discard_tips_core96(
       x_position=abs(round(position.x * 10)),
       x_direction=x_direction,
@@ -2239,7 +2230,6 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     jet: bool = False,
     blow_out: bool = False,
     use_lld: bool = False,
-    liquid_height: float = 0,
     air_transport_retract_dist: float = 10,
     hlc: Optional[HamiltonLiquidClass] = None,
     aspiration_type: int = 0,
@@ -2277,7 +2267,6 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
         automatically.
 
       use_lld: If True, use gamma liquid level detection. If False, use liquid height.
-      liquid_height: The height of the liquid above the bottom of the well, in millimeters.
       air_transport_retract_dist: The distance to retract after aspirating, in millimeters.
 
       aspiration_type: The type of aspiration to perform. (0 = simple; 1 = sequence; 2 = cup emptied
@@ -2312,11 +2301,22 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
 
     # get the first well and tip as representatives
     if isinstance(aspiration, MultiHeadAspirationPlate):
-      top_left_well = aspiration.wells[0]
+      plate = aspiration.wells[0].parent
+      assert isinstance(plate, Plate), "MultiHeadAspirationPlate well parent must be a Plate"
+      rot = plate.get_absolute_rotation()
+      if rot.x % 360 != 0 or rot.y % 360 != 0:
+        raise ValueError("Plate rotation around x or y is not supported for 96 head operations")
+      if rot.z % 360 == 180:
+        ref_well = plate.get_well("H12")
+      elif rot.z % 360 == 0:
+        ref_well = plate.get_well("A1")
+      else:
+        raise ValueError("96 head only supports plate rotations of 0 or 180 degrees around z")
+
       position = (
-        top_left_well.get_absolute_location()
-        + top_left_well.center()
-        + Coordinate(z=top_left_well.material_z_thickness)
+        ref_well.get_absolute_location()
+        + ref_well.center()
+        + Coordinate(z=ref_well.material_z_thickness)
         + aspiration.offset
       )
     else:
@@ -2329,10 +2329,11 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
         + Coordinate(x=x_position, y=y_position)
         + aspiration.offset
       )
+    self._check_96_position_legal(position, skip_z=True)
 
     tip = aspiration.tips[0]
 
-    liquid_height = position.z + liquid_height
+    liquid_height = position.z + (aspiration.liquid_height or 0)
 
     liquid_to_be_aspirated = Liquid.WATER
     if len(aspiration.liquids[0]) > 0 and aspiration.liquids[0][0][0] is not None:
@@ -2381,9 +2382,10 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     #     aspiration_volumes=int(blow_out_air_volume * 10)
     #   )
 
+    x_direction = 0 if position.x >= 0 else 1
     return await self.aspirate_core_96(
-      x_position=round(position.x * 10),
-      x_direction=0,
+      x_position=abs(round(position.x * 10)),
+      x_direction=x_direction,
       y_positions=round(position.y * 10),
       aspiration_type=aspiration_type,
       minimum_traverse_height_at_beginning_of_a_command=round(
@@ -2430,7 +2432,6 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     empty: bool = False,
     blow_out: bool = False,
     hlc: Optional[HamiltonLiquidClass] = None,
-    liquid_height: float = 0,
     dispense_mode: Optional[int] = None,
     air_transport_retract_dist=10,
     use_lld: bool = False,
@@ -2462,7 +2463,6 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
       dispense: The Dispense command to execute.
       jet: Whether to use jet dispense mode.
       blow_out: Whether to blow out after dispensing.
-      liquid_height: The height of the liquid in the well, in mm. Used if LLD is not used.
       dispense_mode: The dispense mode to use. 0 = Partial volume in jet mode 1 = Blow out in jet
         mode 2 = Partial volume at surface 3 = Blow out at surface 4 = Empty tip at fix position.
         If `None`, the mode will be determined based on the `jet`, `empty`, and `blow_out`
@@ -2497,11 +2497,22 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
 
     # get the first well and tip as representatives
     if isinstance(dispense, MultiHeadDispensePlate):
-      top_left_well = dispense.wells[0]
+      plate = dispense.wells[0].parent
+      assert isinstance(plate, Plate), "MultiHeadDispensePlate well parent must be a Plate"
+      rot = plate.get_absolute_rotation()
+      if rot.x % 360 != 0 or rot.y % 360 != 0:
+        raise ValueError("Plate rotation around x or y is not supported for 96 head operations")
+      if rot.z % 360 == 180:
+        ref_well = plate.get_well("H12")
+      elif rot.z % 360 == 0:
+        ref_well = plate.get_well("A1")
+      else:
+        raise ValueError("96 head only supports plate rotations of 0 or 180 degrees around z")
+
       position = (
-        top_left_well.get_absolute_location()
-        + top_left_well.center()
-        + Coordinate(z=top_left_well.material_z_thickness)
+        ref_well.get_absolute_location()
+        + ref_well.center()
+        + Coordinate(z=ref_well.material_z_thickness)
         + dispense.offset
       )
     else:
@@ -2516,9 +2527,10 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
         + Coordinate(x=x_position, y=y_position)
         + dispense.offset
       )
+    self._check_96_position_legal(position, skip_z=True)
     tip = dispense.tips[0]
 
-    liquid_height = position.z + liquid_height
+    liquid_height = position.z + (dispense.liquid_height or 0)
 
     dispense_mode = _dispensing_mode_for_op(empty=empty, jet=jet, blow_out=blow_out)
 
@@ -2555,10 +2567,11 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
 
     channel_pattern = [True] * 12 * 8
 
+    x_direction = 0 if position.x >= 0 else 1
     ret = await self.dispense_core_96(
       dispensing_mode=dispense_mode,
-      x_position=round(position.x * 10),
-      x_direction=0,
+      x_position=abs(round(position.x * 10)),
+      x_direction=x_direction,
       y_position=round(position.y * 10),
       minimum_traverse_height_at_beginning_of_a_command=round(
         (minimum_traverse_height_at_beginning_of_a_command or self._channel_traversal_height) * 10
@@ -2801,7 +2814,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     plate_width: Optional[float] = None,
     use_unsafe_hotel: bool = False,
     iswap_collision_control_level: int = 0,
-    iswap_fold_up_sequence_at_the_end_of_process: bool = True,
+    iswap_fold_up_sequence_at_the_end_of_process: bool = False,
   ):
     if use_arm == "iswap":
       assert (
@@ -3220,13 +3233,40 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     loc.y += (resource.get_size_y() - head_size_y) / 2 + channel_size / 2
     return loc
 
+  def _check_96_position_legal(self, c: Coordinate, skip_z=False) -> None:
+    """Validate that a coordinate is within the allowed range for the 96 head.
+
+    Args:
+      c: The coordinate of the A1 position of the head.
+      skip_z: If True, the z coordinate is not checked. This is useful for commands that handle
+        the z coordinate separately, such as the big four.
+
+    Raises:
+      ValueError: If one or more components are out of range. The error message contains all offending components.
+    """
+
+    errors = []
+    if not (-271.0 <= c.x <= 974.0):
+      errors.append(f"x={c.x}")
+    if not (108.0 <= c.y <= 560.0):
+      errors.append(f"y={c.y}")
+    if not (180.5 <= c.z <= 342.5) and not skip_z:
+      errors.append(f"z={c.z}")
+
+    if len(errors) > 0:
+      raise ValueError(
+        "Illegal 96 head position: "
+        + ", ".join(errors)
+        + " (allowed ranges: x [-271, 974], y [108, 560], z [180.5, 342.5])"
+      )
+
   # ============== Firmware Commands ==============
 
   # -------------- 3.2 System general commands --------------
 
   async def pre_initialize_instrument(self):
     """Pre-initialize instrument"""
-    return await self.send_command(module="C0", command="VI")
+    return await self.send_command(module="C0", command="VI", read_timeout=300)
 
   async def define_tip_needle(
     self,
@@ -3978,6 +4018,22 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
   # -------------- 3.5 Pipetting channel commands --------------
 
   # -------------- 3.5.1 Initialization --------------
+
+  async def initialize_pip(self):
+    """Wrapper around initialize_pipetting_channels firmware command."""
+    dy = (4050 - 2175) // (self.num_channels - 1)
+    y_positions = [4050 - i * dy for i in range(self.num_channels)]
+
+    await self.initialize_pipetting_channels(
+      x_positions=[self.extended_conf["xw"]],  # Tip eject waste X position.
+      y_positions=y_positions,
+      begin_of_tip_deposit_process=int(self._channel_traversal_height * 10),
+      end_of_tip_deposit_process=1220,
+      z_position_at_end_of_a_command=3600,
+      tip_pattern=[True] * self.num_channels,
+      tip_type=4,  # TODO: get from tip types
+      discarding_method=0,
+    )
 
   async def initialize_pipetting_channels(
     self,
@@ -5248,6 +5304,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
 
     # The firmware command expects location of tip A1 of the head.
     loc = self._position_96_head_in_resource(trash96)
+    self._check_96_position_legal(loc, skip_z=True)
 
     return await self.send_command(
       module="C0",
@@ -5761,15 +5818,15 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
 
   async def move_core_96_head_to_defined_position(
     self,
-    x: float = 0,
-    y: float = 0,
-    z: float = 0,
+    x: float,
+    y: float,
+    z: float = 342.5,
     minimum_height_at_beginning_of_a_command: float = 342.5,
   ):
     """Move CoRe 96 Head to defined position
 
     Args:
-      x: X-Position [1mm] of well A1. Must be between 0 and 3000.0. Default 0.
+      x: X-Position [1mm] of well A1. Must be between -300.0 and 300.0. Default 0.
       y: Y-Position [1mm]. Must be between 108.0 and 560.0. Default 0.
       z: Z-Position [1mm]. Must be between 0 and 560.0. Default 0.
       minimum_height_at_beginning_of_a_command: Minimum height at beginning of a command [1mm]
@@ -5777,17 +5834,16 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
         342.5. Default 342.5.
     """
 
-    assert 0 <= x <= 3000.0, "x_position must be between 0 and 30000"
-    assert 108.0 <= y <= 560.0, "y_position must be between 1080 and 5600"
-    assert 0 <= y <= 560.0, "z_position must be between 0 and 5600"
+    # TODO: these are values for a STAR. Find them for a STARlet.
+    self._check_96_position_legal(Coordinate(x, y, z))
     assert (
       0 <= minimum_height_at_beginning_of_a_command <= 342.5
-    ), "minimum_height_at_beginning_of_a_command must be between 0 and 3425"
+    ), "minimum_height_at_beginning_of_a_command must be between 0 and 342.5"
 
     return await self.send_command(
       module="C0",
       command="EM",
-      xs=f"{round(x*10):05}",
+      xs=f"{abs(round(x*10)):05}",
       xd=0 if x >= 0 else 1,
       yh=f"{round(y*10):04}",
       za=f"{round(z*10):04}",
@@ -6409,7 +6465,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     """Move iSWAP X to absolute position"""
     loc = await self.request_iswap_position()
     await self.move_iswap_x_relative(
-      step_size=x_position - loc["xs"],
+      step_size=x_position - loc.x,
       allow_splitting=True,
     )
 
@@ -6417,7 +6473,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     """Move iSWAP Y to absolute position"""
     loc = await self.request_iswap_position()
     await self.move_iswap_y_relative(
-      step_size=y_position - loc["yj"],
+      step_size=y_position - loc.y,
       allow_splitting=True,
     )
 
@@ -6425,7 +6481,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     """Move iSWAP Z to absolute position"""
     loc = await self.request_iswap_position()
     await self.move_iswap_z_relative(
-      step_size=z_position - loc["zj"],
+      step_size=z_position - loc.z,
       allow_splitting=True,
     )
 
@@ -6520,7 +6576,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     collision_control_level: int = 1,
     acceleration_index_high_acc: int = 4,
     acceleration_index_low_acc: int = 1,
-    iswap_fold_up_sequence_at_the_end_of_process: bool = True,
+    iswap_fold_up_sequence_at_the_end_of_process: bool = False,
   ):
     """Get plate using iswap.
 
@@ -6546,7 +6602,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
                                Default 1.
       acceleration_index_high_acc: acceleration index high acc. Must be between 0 and 4. Default 4.
       acceleration_index_low_acc: acceleration index high acc. Must be between 0 and 4. Default 1.
-      iswap_fold_up_sequence_at_the_end_of_process: fold up sequence at the end of process. Default True.
+      iswap_fold_up_sequence_at_the_end_of_process: fold up sequence at the end of process. Default False.
     """
 
     assert 0 <= x_position <= 30000, "x_position must be between 0 and 30000"
@@ -6614,7 +6670,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     collision_control_level: int = 1,
     acceleration_index_high_acc: int = 4,
     acceleration_index_low_acc: int = 1,
-    iswap_fold_up_sequence_at_the_end_of_process: bool = True,
+    iswap_fold_up_sequence_at_the_end_of_process: bool = False,
   ):
     """put plate
 
@@ -6639,7 +6695,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
             Default 4.
       acceleration_index_low_acc: acceleration index high acc. Must be between 0 and 4.
             Default 1.
-      iswap_fold_up_sequence_at_the_end_of_process: fold up sequence at the end of process. Default True.
+      iswap_fold_up_sequence_at_the_end_of_process: fold up sequence at the end of process. Default False.
     """
 
     assert 0 <= x_position <= 30000, "x_position must be between 0 and 30000"
@@ -6688,7 +6744,8 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
 
   async def iswap_rotate(
     self,
-    position: int = 33,
+    rotation_drive: "RotationDriveOrientation",
+    grip_direction: GripDirection,
     gripper_velocity: int = 55_000,
     gripper_acceleration: int = 170,
     gripper_protection: Literal[0, 1, 2, 3, 4, 5, 6, 7] = 5,
@@ -6707,6 +6764,28 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     assert 20 <= wrist_velocity <= 65_000
     assert 20 <= wrist_acceleration <= 200
 
+    position = 0
+
+    if rotation_drive == STARBackend.RotationDriveOrientation.LEFT:
+      position += 10
+    elif rotation_drive == STARBackend.RotationDriveOrientation.FRONT:
+      position += 20
+    elif rotation_drive == STARBackend.RotationDriveOrientation.RIGHT:
+      position += 30
+    else:
+      raise ValueError("Invalid rotation drive orientation")
+
+    if grip_direction == GripDirection.FRONT:
+      position += 1
+    elif grip_direction == GripDirection.RIGHT:
+      position += 2
+    elif grip_direction == GripDirection.BACK:
+      position += 3
+    elif grip_direction == GripDirection.LEFT:
+      position += 4
+    else:
+      raise ValueError("Invalid grip direction")
+
     return await self.send_command(
       module="R0",
       command="PD",
@@ -6718,6 +6797,15 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
       tr=f"{wrist_acceleration:03}",
       tw=wrist_protection,
     )
+
+  async def iswap_dangerous_release_break(self):
+    return await self.send_command(module="R0", command="BA")
+
+  async def iswap_reengage_break(self):
+    return await self.send_command(module="R0", command="BO")
+
+  async def iswap_initialize_z_axis(self):
+    return await self.send_command(module="R0", command="ZI")
 
   async def move_plate_to_position(
     self,
@@ -6791,7 +6879,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
   async def collapse_gripper_arm(
     self,
     minimum_traverse_height_at_beginning_of_a_command: int = 3600,
-    iswap_fold_up_sequence_at_the_end_of_process: bool = True,
+    iswap_fold_up_sequence_at_the_end_of_process: bool = False,
   ):
     """Collapse gripper arm
 
@@ -6799,7 +6887,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
       minimum_traverse_height_at_beginning_of_a_command: Minimum traverse height at beginning of a
                                                          command 0.1mm]. Must be between 0 and 3600.
                                                          Default 3600.
-      iswap_fold_up_sequence_at_the_end_of_process: fold up sequence at the end of process. Default True.
+      iswap_fold_up_sequence_at_the_end_of_process: fold up sequence at the end of process. Default False.
     """
 
     assert (
@@ -6974,7 +7062,7 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     resp = await self.send_command(module="C0", command="QP", fmt="ph#")
     return resp is not None and resp["ph"] == 1
 
-  async def request_iswap_position(self):
+  async def request_iswap_position(self) -> Coordinate:
     """Request iSWAP position ( grip center )
 
     Returns:
@@ -6987,10 +7075,11 @@ class STARBackend(HamiltonLiquidHandler, HamiltonHeaterShakerInterface):
     """
 
     resp = await self.send_command(module="C0", command="QG", fmt="xs#####xd#yj####yd#zj####zd#")
-    resp["xs"] = resp["xs"] / 10
-    resp["yj"] = resp["yj"] / 10
-    resp["zj"] = resp["zj"] / 10
-    return resp
+    return Coordinate(
+      x=(resp["xs"] / 10) * (1 if resp["xd"] == 0 else -1),
+      y=(resp["yj"] / 10) * (1 if resp["yd"] == 0 else -1),
+      z=(resp["zj"] / 10) * (1 if resp["zd"] == 0 else -1),
+    )
 
   async def request_iswap_initialization_status(self) -> bool:
     """Request iSWAP initialization status
