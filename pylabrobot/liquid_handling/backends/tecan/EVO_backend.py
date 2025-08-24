@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 from abc import ABCMeta, abstractmethod
 from typing import (
@@ -180,10 +181,11 @@ class EVOBackend(TecanLiquidHandler):
   LIHA = "C5"
   ROMA = "C1"
   MCA = "W1"
-  PNP = "W2"
+  PNP = "W2" #W1 in other implementations
 
   def __init__(
     self,
+    arms: List[Union[LiHa, PnP, Mca, RoMa ]],
     diti_count: int = 0,
     packet_read_timeout: int = 12,
     read_timeout: int = 60,
@@ -202,6 +204,10 @@ class EVOBackend(TecanLiquidHandler):
       read_timeout=read_timeout,
       write_timeout=write_timeout,
     )
+
+    self.arms: List[EVOArm] = [arm(self, arm.module) for arm in arms]
+
+    self._arms: List[EVOArm] = None
 
     self._num_channels: Optional[int] = None
     self.diti_count = diti_count
@@ -256,9 +262,20 @@ class EVOBackend(TecanLiquidHandler):
     if self._mca_connected is None:
       raise RuntimeError("mca_connected not set, forgot to call `setup`?")
     return self._mca_connected
+  
+  @property
+  def arms_configured(self) -> bool:
+    """Whether arm order has set"""
+    if self._arms is None:
+      raise RuntimeError("arms have not been configured")
+    return self
 
   def serialize(self) -> dict:
     return {**super().serialize(), **self.io.serialize()}
+  
+  # def set_arms(self):
+  #   for arm in self._arms:
+      
 
   async def setup(self):
     """Setup
@@ -268,9 +285,22 @@ class EVOBackend(TecanLiquidHandler):
 
     await super().setup()
 
-    self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
-    self._mca_connected = await self.setup_arm(EVOBackend.MCA)
-    self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
+    for arm in self.arms: # Iterate through ordered list of arms and call setup_arm
+      if isinstance(arm, PnP):
+        self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
+      elif isinstance(arm, RoMa):
+        self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
+      elif isinstance(arm, LiHa):
+        self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
+      elif isinstance(arm, Mca):
+        self._mca_connected = await self.setup_arm(EVOBackend.MCA)
+      else:
+        raise RuntimeError(f"{arm.__class__.__name__} is not an assignable arm")
+      
+
+    # self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
+    # self._mca_connected = await self.setup_arm(EVOBackend.MCA)
+    # self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
 
     if self.roma_connected:  # position_initialization_x in reverse order from setup_arm
       self.roma = RoMa(self, EVOBackend.ROMA)
@@ -932,6 +962,13 @@ class LiHa(EVOArm):
   Provides firmware commands for the LiHa
   """
 
+  module = EVOBackend.LIHA
+
+  # def __init__(self, backend, module):
+  #   super().__init__(backend, module)
+  #   self.module = "C1"
+  
+
   async def initialize_plunger(self, tips):
     """Initializes plunger and valve drive
 
@@ -1201,11 +1238,15 @@ class LiHa(EVOArm):
 class Mca(EVOArm):
   pass
 
+class PnP(EVOArm):
+  module = EVOBackend.PNP
+  pass
 
 class RoMa(EVOArm):
   """
   Provides firmware commands for the RoMa plate robot
   """
+  module = EVOBackend.ROMA
 
   async def report_z_param(self, param: int) -> int:
     """Report current parameter for z-axis.
@@ -1396,3 +1437,5 @@ class EVO(EVOBackend):
     raise RuntimeError(
       "`EVO` is deprecated. Please use `EVOBackend` instead.",
     )
+
+# evo = EVOBackend(arms=[PnP(), LiHa(), RoMa()])
