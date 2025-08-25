@@ -7,6 +7,7 @@ from typing import (
   Optional,
   Sequence,
   Tuple,
+  Type,
   TypeVar,
   Union,
 )
@@ -185,7 +186,7 @@ class EVOBackend(TecanLiquidHandler):
 
   def __init__(
     self,
-    arms: List[Union[LiHa, PnP, Mca, RoMa ]],
+    arms: List[Type[Union[LiHa, PnP, Mca, RoMa ]]],
     diti_count: int = 0,
     packet_read_timeout: int = 12,
     read_timeout: int = 60,
@@ -207,7 +208,7 @@ class EVOBackend(TecanLiquidHandler):
 
     self.arms: List[EVOArm] = [arm(self, arm.module) for arm in arms]
 
-    self._arms: List[EVOArm] = None
+    self._arms_configured: Optional[bool] = None
 
     self._num_channels: Optional[int] = None
     self.diti_count = diti_count
@@ -266,15 +267,15 @@ class EVOBackend(TecanLiquidHandler):
   @property
   def arms_configured(self) -> bool:
     """Whether arm order has set"""
-    if self._arms is None:
+    if self._arms_configured is None:
       raise RuntimeError("arms have not been configured")
-    return self
+    return self._arms_configured
 
   def serialize(self) -> dict:
     return {**super().serialize(), **self.io.serialize()}
   
   # def set_arms(self):
-  #   for arm in self._arms:
+  #   for arm in self._arms_configured:
       
 
   async def setup(self):
@@ -297,11 +298,14 @@ class EVOBackend(TecanLiquidHandler):
       else:
         raise RuntimeError(f"{arm.__class__.__name__} is not an assignable arm")
       
-
+    self._arms_configured = True
     # self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
     # self._mca_connected = await self.setup_arm(EVOBackend.MCA)
     # self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
 
+
+
+    # TODO: REMOVE, initialize and Park in reverse order
     if self.roma_connected:  # position_initialization_x in reverse order from setup_arm
       self.roma = RoMa(self, EVOBackend.ROMA)
       await self.roma.position_initialization_x()
@@ -333,6 +337,7 @@ class EVOBackend(TecanLiquidHandler):
     await self.liha.position_absolute_all_axis(45, 1031, 90, [self._z_range] * self.num_channels)
 
   async def setup_arm(self, module):
+    """Calls PIA or PIB initialization command EVO"""
     try:
       if module == EVO.MCA:
         await self.send_command(module, command="PIB")
@@ -1236,7 +1241,9 @@ class LiHa(EVOArm):
 
 
 class Mca(EVOArm):
-  pass
+  def __init__(self, backend: EVOBackend, module: str):
+    super().__init__(backend, module)
+    raise NotImplementedError()
 
 class PnP(EVOArm):
   module = EVOBackend.PNP

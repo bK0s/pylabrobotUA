@@ -33,7 +33,7 @@ class EVOTests(unittest.IsolatedAsyncioTestCase):
     super().setUp()
 
     # mock the EVO
-    self.evo = EVOBackend(diti_count=8)
+    self.evo = EVOBackend(diti_count=8, arms=[LiHa, RoMa])
     self.evo.send_command = unittest.mock.AsyncMock()  # type: ignore[method-assign]
 
     async def send_command(module, command, params=None):
