@@ -289,36 +289,48 @@ class EVOBackend(TecanLiquidHandler):
     for arm in self.arms: # Iterate through ordered list of arms and call setup_arm
       if isinstance(arm, PnP):
         self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
+        self.pnp = arm
       elif isinstance(arm, RoMa):
         self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
+        self.roma = arm
       elif isinstance(arm, LiHa):
         self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
+        self.liha = arm
       elif isinstance(arm, Mca):
         self._mca_connected = await self.setup_arm(EVOBackend.MCA)
+        self.mca = arm
       else:
         raise RuntimeError(f"{arm.__class__.__name__} is not an assignable arm")
       
     self._arms_configured = True
-    # self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
-    # self._mca_connected = await self.setup_arm(EVOBackend.MCA)
-    # self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
 
 
+    # initialize and Park in reverse order
+    for arm in reversed(self.arms):
+      if isinstance(arm, PnP):
+        await self._park_pnp()
+      elif isinstance(arm, RoMa):
+        await self._park_roma()
+      elif isinstance(arm, LiHa):
+        await self._park_liha
+      elif isinstance(arm, Mca):
+        await self._park_mca()
+      else:
+        raise RuntimeError(f"Could not park {arm}")
+      
+    # if self.roma_connected:  # position_initialization_x in reverse order from setup_arm
+    #   self.roma = RoMa(self, EVOBackend.ROMA)
+    #   await self.roma.position_initialization_x()
+    #   # move to home position (TBD) after initialization
+    #   await self._park_roma()
+    # if self.mca_connected:
+    #   self.mca = Mca(self, EVO.MCA)
+    #   # await self.mca.position_initialization_x() # function does not work for mca.
+    #   await self._park_mca()
 
-    # TODO: REMOVE, initialize and Park in reverse order
-    if self.roma_connected:  # position_initialization_x in reverse order from setup_arm
-      self.roma = RoMa(self, EVOBackend.ROMA)
-      await self.roma.position_initialization_x()
-      # move to home position (TBD) after initialization
-      await self._park_roma()
-    if self.mca_connected:
-      self.mca = Mca(self, EVO.MCA)
-      # await self.mca.position_initialization_x() # function does not work for mca.
-      await self._park_mca()
-
-    if self.liha_connected:
-      self.liha = LiHa(self, EVOBackend.LIHA)
-      await self.liha.position_initialization_x()
+    # if self.liha_connected:
+    #   self.liha = LiHa(self, EVOBackend.LIHA)
+    #   await self.liha.position_initialization_x()
 
     self._num_channels = await self.liha.report_number_tips()
     self._x_range = await self.liha.report_x_param(5)
@@ -381,6 +393,8 @@ class EVOBackend(TecanLiquidHandler):
     await self.send_command(EVO.MCA, command="BMA", params=[0, 0, 0])
     await asyncio.sleep(0.5)
 
+  async def _park_pnp(self):
+    raise NotImplementedError()
   # ============== LiquidHandlerBackend methods ==============
 
   async def aspirate(
