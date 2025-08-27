@@ -135,7 +135,7 @@ class TecanDeck(Deck):
       raise ValueError(f"Resource {resource} is not a Tecan resource.")
 
     return Coordinate(
-      (rails - 1) * _RAILS_WIDTH - resource.off_x + 100,
+      (rails - 1) * _RAILS_WIDTH - resource.off_x ,
       resource.off_y + 345 - resource.get_absolute_size_y(),
       0,
     )  # TODO: verify
