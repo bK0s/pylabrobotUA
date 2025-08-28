@@ -340,6 +340,7 @@ class EVOBackend(TecanLiquidHandler):
     self._z_range = (await self.liha.report_z_param(5))[0]
 
     # Initialize plungers. Assumes wash station assigned at rail 1.
+    # TODO: Modify for different wash station location
     await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
     await self.liha.position_absolute_all_axis(45, 1031, 90, [1200] * self.num_channels)
     await self.liha.initialize_plunger(self._bin_use_channels(list(range(self.num_channels))))
