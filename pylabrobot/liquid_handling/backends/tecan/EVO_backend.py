@@ -286,10 +286,12 @@ class EVOBackend(TecanLiquidHandler):
 
     await super().setup()
 
+    # TODO: Change module variable that is passed to setu_arm()
+    # Should be instance attribute, not class
     for arm in self.arms: # Iterate through ordered list of arms and call setup_arm
       if isinstance(arm, PnP):
         self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
-        self.pnp = arm
+        self.pnp = arm    # TODO: Fix arm assignment strategy when using duplicate arms
       elif isinstance(arm, RoMa):
         self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
         self.roma = arm
