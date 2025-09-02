@@ -401,7 +401,8 @@ class EVOBackend(TecanLiquidHandler):
     await asyncio.sleep(0.5)
 
   async def _park_pnp(self):
-    raise NotImplementedError()
+    await self.pnp.position_absolute_z(300)
+    await self.pnp.position_absolute_all(0, 0, None, None, None)
   # ============== LiquidHandlerBackend methods ==============
 
   async def aspirate(
@@ -1260,6 +1261,10 @@ F
 
     await self.backend.send_command(module=self.module, command="AST", params=[tips, discard_hight])
 
+class Mca(EVOArm):
+  def __init__(self, backend: EVOBackend, module: str):
+    super().__init__(backend, module)
+    raise NotImplementedError()
 
 class PnP(EVOArm):
     """
