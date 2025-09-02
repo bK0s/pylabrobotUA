@@ -181,8 +181,8 @@ class EVOBackend(TecanLiquidHandler):
 
   LIHA = "C5"
   ROMA = "C1"
-  MCA = "W1"
-  PNP = "W2" #W1 in other implementations
+  MCA = "W2"
+  PNP = "W1"
 
   def __init__(
     self,
@@ -334,6 +334,10 @@ class EVOBackend(TecanLiquidHandler):
     #   self.liha = LiHa(self, EVOBackend.LIHA)
     #   await self.liha.position_initialization_x()
 
+    if self.pnp_connected:
+      self.pnp = PnP(self, EVOBackend.PNP)
+      await self.pnp.position_initialization_x()
+
     self._num_channels = await self.liha.report_number_tips()
     self._x_range = await self.liha.report_x_param(5)
     self._y_range = (await self.liha.report_y_param(5))[0]
@@ -354,7 +358,7 @@ class EVOBackend(TecanLiquidHandler):
   async def setup_arm(self, module):
     """Calls PIA or PIB initialization command EVO"""
     try:
-      if module == EVO.MCA:
+      if module == EVOBackend.MCA:
         await self.send_command(module, command="PIB")
 
       await self.send_command(module, command="PIA")
@@ -363,17 +367,17 @@ class EVOBackend(TecanLiquidHandler):
         return False
       raise e
 
-    if module != EVO.MCA:
+    if module != EVOBackend.MCA:
       await self.send_command(module, command="BMX", params=[2])
 
     return True
 
   async def _park_liha(self):
     await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
-    await self.liha.position_absolute_all_axis(45, 1031, 90, [self._z_range] * self.num_channels)
+    await self.liha.position_absolute_all_axis(9241, 793, 90, [self._z_range] * self.num_channels)
 
   async def _park_roma(self):
-    await self.roma.set_vector_coordinate_position(1, 9000, 2000, 2464, 1800, None, 1, 0)
+    await self.roma.set_vector_coordinate_position(1, 14628, 1999, 2200, 1800, 900, 1, 0)
     await self.roma.action_move_vector_coordinate_position()
 
   async def _park_mca(self):
@@ -381,19 +385,19 @@ class EVOBackend(TecanLiquidHandler):
     # TODO CHANGE TO USE CORRECT FUNCTIONS
 
     # Ensure MCA is initialized before moving
-    await self.send_command(EVO.MCA, command="PIA")
+    await self.send_command(EVOBackend.MCA, command="PIA")
     await asyncio.sleep(0.5)
 
     # Raise MCA Z-axis first to avoid collision
-    await self.send_command(EVO.MCA, command="PAA", params=[None, None, 2000])  # Raise Z-axis
+    await self.send_command(EVOBackend.MCA, command="PAA", params=[None, None, 2000])  # Raise Z-axis
     await asyncio.sleep(1)
 
     # Move MCA to parking position (adjust X, Y as needed)
-    await self.send_command(EVO.MCA, command="PAA", params=[6000, 1000, None])
+    await self.send_command(EVOBackend.MCA, command="PAA", params=[6000, 1000, None])
     await asyncio.sleep(1)
 
     # Stop movement to prevent drifting
-    await self.send_command(EVO.MCA, command="BMA", params=[0, 0, 0])
+    await self.send_command(EVOBackend.MCA, command="BMA", params=[0, 0, 0])
     await asyncio.sleep(0.5)
 
   async def _park_pnp(self):
@@ -1149,7 +1153,7 @@ class LiHa(EVOArm):
 
   async def set_z_travel_height(self, z):
     """Set z-travel height.
-
+F
     Args:
       z: travel heights in absolute 1/10 mm for each channel, must be in allowed
          machine range + 20
@@ -1257,14 +1261,160 @@ class LiHa(EVOArm):
     await self.backend.send_command(module=self.module, command="AST", params=[tips, discard_hight])
 
 
-class Mca(EVOArm):
-  def __init__(self, backend: EVOBackend, module: str):
-    super().__init__(backend, module)
-    raise NotImplementedError()
-
 class PnP(EVOArm):
-  module = EVOBackend.PNP
-  pass
+    """
+    Provides firmware commands for the Pick & Place (PnP) arm.
+    """
+
+    async def fake_initialize(self):
+        """Fake initialization of all axes (no physical movement)."""
+        await self.backend.send_command(module=self.module, command="PIF")
+
+    async def initialize(self):
+        """Initialize all axes (X/Y/Z/R/G). Required before any movement."""
+        await self.backend.send_command(module=self.module, command="PIA")
+
+    async def initialize_x(self, speed: int = None):
+        """Initialize X-axis, optional override for speed (0.1 mm/s)."""
+        await self.backend.send_command(self.module, "PIX", [speed])
+
+    async def initialize_y(self, speed: int = None):
+        """Initialize Y-axis, optional override for speed (0.1 mm/s)."""
+        await self.backend.send_command(self.module, "PIY", [speed])
+
+    async def initialize_z(self, speed: int = None):
+        """Initialize Z-axis, optional override for speed (0.1 mm/s)."""
+        await self.backend.send_command(self.module, "PIZ", [speed])
+
+    async def initialize_dependent_axes(self):
+        """Initialize Z, Y, Rotator, and Gripper axes."""
+        await self.backend.send_command(self.module, "PIR")
+
+    # Absolute positioning for individual axes
+    async def position_absolute_x(self, x: int):
+        await self.backend.send_command(self.module, "PAX", [x])
+
+    async def position_absolute_y(self, y: int):
+        await self.backend.send_command(self.module, "PAY", [y])
+
+    async def position_absolute_z(self, z: int):
+        await self.backend.send_command(self.module, "PAZ", [z])
+
+    async def position_absolute_r(self, r: int):
+        await self.backend.send_command(self.module, "PAR", [r])
+
+    async def position_absolute_g(self, g: int):
+        await self.backend.send_command(self.module, "PAG", [g])
+
+    # Relative positioning for individual axes
+    async def position_relative_x(self, x: int):
+        await self.backend.send_command(self.module, "PRX", [x])
+
+    async def position_relative_y(self, y: int):
+        await self.backend.send_command(self.module, "PRY", [y])
+
+    async def position_relative_z(self, z: int):
+        await self.backend.send_command(self.module, "PRZ", [z])
+
+    async def position_relative_r(self, r: int):
+        await self.backend.send_command(self.module, "PRR", [r])
+
+    async def position_relative_g(self, g: int):
+        await self.backend.send_command(self.module, "PRG", [g])
+
+    # Simultaneous axis movement
+    async def position_absolute_all(self, x=None, y=None, z=None, r=None, g=None):
+        params = [x, y, z, r, g]
+        await self.backend.send_command(self.module, "PAA", params)
+
+    async def position_relative_all(self, x=None, y=None, z=None, r=None, g=None):
+        params = [x, y, z, r, g]
+        await self.backend.send_command(self.module, "PRA", params)
+
+    async def move_absolute_slow(self, x=None, y=None, z=None, r=None, g=None):
+        params = [x, y, z, r, g]
+        await self.backend.send_command(self.module, "MAA", params)
+
+    async def move_relative_slow(self, x=None, y=None, z=None, r=None, g=None):
+        params = [x, y, z, r, g]
+        await self.backend.send_command(self.module, "MRA", params)
+
+    # Gripper and tube handling
+    async def grip_tube(self, grip_search: int, grip_open: int):
+        await self.backend.send_command(self.module, "AGR", [grip_search, grip_open])
+
+    async def pick_tube(self, grip_search: int, grip_open: int, z_pick: int, z_up: int, rotation: int, rot_comp: int):
+        params = [grip_search, grip_open, z_pick, z_up, rotation, rot_comp]
+        await self.backend.send_command(self.module, "APC", params)
+
+    async def place_tube(self, grip_open: int, z_place: int, z_up: int, rotation: int, tube_check: int, wipe_off_dist: int, tube_left_check: int):
+        params = [grip_open, z_place, z_up, rotation, tube_check, wipe_off_dist, tube_left_check]
+        await self.backend.send_command(self.module, "APL", params)
+
+    # Teach diameter
+    async def teach_diameter(self, diameter: int):
+        await self.backend.send_command(self.module, "ATD", [diameter])
+
+    # Auto-range commands
+    async def auto_range_x(self):
+        await self.backend.send_command(self.module, "ARX")
+
+    async def auto_range_y(self):
+        await self.backend.send_command(self.module, "ARY")
+
+    async def auto_range_z(self):
+        await self.backend.send_command(self.module, "ARZ")
+
+    # Set commands (examples, extend as needed)
+    async def set_grip_params(self, pwm_limit: int, grip_speed: int, min_space: int, max_space: int):
+        await self.backend.send_command(self.module, "SGP", [pwm_limit, grip_speed, min_space, max_space])
+
+    async def set_fast_speed_x(self, end_speed: int, accel: int):
+        await self.backend.send_command(self.module, "SFX", [end_speed, accel])
+
+    async def set_fast_speed_y(self, end_speed: int, accel: int):
+        await self.backend.send_command(self.module, "SFY", [end_speed, accel])
+
+    async def set_fast_speed_z(self, end_speed: int, accel: int):
+        await self.backend.send_command(self.module, "SFZ", [end_speed, accel])
+
+    async def set_fast_speed_r(self, end_speed: int, accel: int):
+        await self.backend.send_command(self.module, "SFR", [end_speed, accel])
+
+    # Report commands
+    async def report_x_param(self, selector: int) -> int:
+        resp = await self.backend.send_command(self.module, "RPX", [selector])
+        return resp["data"][0]
+
+    async def report_y_param(self, selector: int) -> int:
+        resp = await self.backend.send_command(self.module, "RPY", [selector])
+        return resp["data"][0]
+
+    async def report_z_param(self, selector: int) -> int:
+        resp = await self.backend.send_command(self.module, "RPZ", [selector])
+        return resp["data"][0]
+
+    async def report_r_param(self, selector: int) -> int:
+        resp = await self.backend.send_command(self.module, "RPR", [selector])
+        return resp["data"][0]
+
+    async def report_g_param(self, selector: int) -> int:
+        resp = await self.backend.send_command(self.module, "RPG", [selector])
+        return resp["data"][0]
+
+    async def report_gripper_param(self, selector: int) -> int:
+        resp = await self.backend.send_command(self.module, "RGP", [selector])
+        return resp["data"][0]
+
+    async def report_tube_diameter(self) -> int:
+        resp = await self.backend.send_command(self.module, "RTD")
+        return resp["data"][0]
+
+    async def report_displacement_x(self) -> int:
+        resp = await self.backend.send_command(self.module, "RXD")
+        return resp["data"][0]
+
+
 
 class RoMa(EVOArm):
   """

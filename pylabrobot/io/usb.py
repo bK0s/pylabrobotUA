@@ -49,8 +49,8 @@ class USB(IOBase):
     device_address: Optional[int] = None,
     serial_number: Optional[str] = None,
     packet_read_timeout: int = 3,
-    read_timeout: int = 30,
-    write_timeout: int = 30,
+    read_timeout: int = 40,
+    write_timeout: int = 40,
   ):
     """Initialize an io.USB object.
 
@@ -159,7 +159,7 @@ class USB(IOBase):
 
     def read_or_timeout():
       # Attempt to read packets until timeout, or when we identify the right id.
-      timeout_time = time.time() + timeout
+      timeout_time = time.time() + (timeout * 2)
 
       while time.time() < timeout_time:
         # read response from endpoint, and keep reading until the packet is smaller than the max
