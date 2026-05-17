@@ -126,6 +126,9 @@ class TecanLiquidHandler(LiquidHandlerBackend, metaclass=ABCMeta):
       data.append(int(x) if x.isdigit() else x)
 
     return {"module": module, "data": data}
+  
+  def permutate_y_coord(self, command: str, params: Optional[List[Optional[int]]]) -> int:
+    pass
 
   async def send_command(
     self,
@@ -274,6 +277,12 @@ class EVOBackend(TecanLiquidHandler):
   def serialize(self) -> dict:
     return {**super().serialize(), **self.io.serialize()}
   
+  def get_system_coordinates(self, resource: Resource) -> Coordinate:
+    """Get Tecan coordinates from particular resource"""
+    loc = resource.get_absolute_location()
+    loc.y = round(loc.y * -1 + 332, 1)          # NOTE: Approx for individual implementation
+    return loc
+  
   # def set_arms(self):
   #   for arm in self._arms_configured:
       
@@ -320,23 +329,6 @@ class EVOBackend(TecanLiquidHandler):
       else:
         raise RuntimeError(f"Could not park {arm}")
       
-    # if self.roma_connected:  # position_initialization_x in reverse order from setup_arm
-    #   self.roma = RoMa(self, EVOBackend.ROMA)
-    #   await self.roma.position_initialization_x()
-    #   # move to home position (TBD) after initialization
-    #   await self._park_roma()
-    # if self.mca_connected:
-    #   self.mca = Mca(self, EVO.MCA)
-    #   # await self.mca.position_initialization_x() # function does not work for mca.
-    #   await self._park_mca()
-
-    # if self.liha_connected:
-    #   self.liha = LiHa(self, EVOBackend.LIHA)
-    #   await self.liha.position_initialization_x()
-
-    if self.pnp_connected:
-      self.pnp = PnP(self, EVOBackend.PNP)
-      await self.pnp.position_initialization_x()
 
     self._num_channels = await self.liha.report_number_tips()
     self._x_range = await self.liha.report_x_param(5)
@@ -1270,6 +1262,7 @@ class PnP(EVOArm):
     """
     Provides firmware commands for the Pick & Place (PnP) arm.
     """
+    module = EVOBackend.PNP
 
     async def fake_initialize(self):
         """Fake initialization of all axes (no physical movement)."""
