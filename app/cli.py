@@ -2,7 +2,6 @@ import asyncio
 from os import popen
 import subprocess
 from sys import stderr, stdout
-import textual
 from textual.app import App, ComposeResult
 from textual.message import Message
 from textual.widget import Widget
@@ -13,9 +12,13 @@ from textual.screen import Screen
 from textual import on
 from textual.worker import Worker
 
+from pylabrobot import __version__
+
 import requests
 
 from subprocess import Popen, PIPE, STDOUT
+
+# TODO: Move all views to seperate folder, keep views and logic seperate
 
 TITLE = r"""
   ___      _         _    ___     _         _
@@ -32,11 +35,12 @@ MARKDOWN_TAB_DEVICES= '''
 - option 2
 '''
 
-MARKDOWN_TAB_HOME= '''
-# PyLabRobot CLI
-Version: 0.0.0\n
-Github:\n
-Developed for use with PyLabRobot software
+MARKDOWN_TAB_HOME= f'''
+# PyLabRobot CLI \n
+Version: 0.0.0 \n
+PyLabRobot Version: {__version__} \n
+Github: \n
+Developed for use with PyLabRobot software at the University of Alberta
 '''
 
 class Title(Widget):
@@ -100,6 +104,7 @@ class MenuTabs(Horizontal):
         yield RichLog(id="log", highlight=True)
       with TabPane("Status", id="status"):
         yield Markdown("# Status")
+        yield Label("Connection Status: ")
       with TabPane("Devices", id="devices"):
         yield Markdown(MARKDOWN_TAB_DEVICES)
       with TabPane("Settings", id="settings"):
@@ -111,15 +116,13 @@ class MenuTabs(Horizontal):
 
   async def _start_controller(self) -> None:
     log = self.query_one("#log", RichLog)
-    self.notify("Starting Controller...")
+    self.notify("Starting Controller...", severity="warning")
     log.write("*" * 5 + " Launching controller " + "*" * 5 + "\n")
     proc = await asyncio.create_subprocess_shell("python3 pylabrobot/app/tecan_controller.py", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await proc.communicate()
     log.write("=" * 20 + f"\n[Tecan Robot] {stdout.decode()}\n" + "="*20 )
     if stderr:
       log.write(f"ERROR: {stderr.decode()}")
-    # for line in stdout.decode():
-      # log.write_line(f"[Tecan Robot] {line}")
 
   @on(Button.Pressed, "#test")
   async def start_controller(self, event: Button.Pressed) -> None:
@@ -128,6 +131,8 @@ class MenuTabs(Horizontal):
 
     # proc = asyncio.create_subprocess_shell("python3 pylabrobot/app/tecan_controller.py", stdout=asyncio.subprocess.PIPE)
     self.run_worker(self._start_controller())
+    # content = self.query("#main_content", ContentSwitcher)
+    # content.current = "main_content"
 
 
 
@@ -147,24 +152,28 @@ class MainContent(Widget):
       width: 2fr;
       height: 1fr;
       border: solid white;
+      align: center middle;
   }
   """
   def compose(self) -> ComposeResult:
-    with ContentSwitcher(initial="loading"):
+    yield Button("switch", id="switch")
+    with ContentSwitcher(id="main_content", initial="loading"):
       # yield Markdown("Home", id="home")
-      yield LoadingIndicator(id="loading")
+      yield LoadingIndicator(id="loading", classes="align")
+      yield Horizontal(id="alternate")
+
+  @on(Button.Pressed, "#switch")
+  def switch(self, event:Button.Pressed) -> None:
+    self.query_one(ContentSwitcher).current = "alternate"
 
 class MainScreen(Screen):
   def compose(self) -> ComposeResult:
     yield Header(id="Header")
     yield Footer(id="Footer")
-      # yield ColumnsContainer(id="Columns1")
     with Horizontal():
       yield MenuTabs(id="main_menu").focus()
       yield MainContent()
-      # yield ColumnsContainer(id="Columns2")
-    # yield Label("Log")
-    # yield Log(id="log")
+
   def on_mount(self) -> None:
     self.title = "Pylabrobot"
 
