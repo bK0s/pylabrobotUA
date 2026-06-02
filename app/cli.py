@@ -18,7 +18,7 @@ import requests
 
 from subprocess import Popen, PIPE, STDOUT
 
-# TODO: Move all views to seperate folder, keep views and logic seperate
+#TODO: Move all views to seperate folder, keep views and logic seperate
 
 TITLE = r"""
   ___      _         _    ___     _         _
@@ -91,7 +91,6 @@ class MenuTabs(Horizontal):
   def compose(self) -> ComposeResult:
     with TabbedContent():
       with TabPane("Home", id="home"):
-        # yield Title(id="title")
         yield Static(TITLE, id="title")
         yield Markdown(MARKDOWN_TAB_HOME)
         yield Rule(orientation="horizontal", line_style="double")
@@ -99,7 +98,6 @@ class MenuTabs(Horizontal):
           yield Button("Start Controller", id="test")
           yield Button("Clear", id="clear")
           yield Button("Ping", id="ping")
-        # yield Log(id="log")
         yield Rule(orientation="horizontal", line_style="double")
         yield RichLog(id="log", highlight=True)
       with TabPane("Status", id="status"):
@@ -155,16 +153,24 @@ class MainContent(Widget):
       align: center middle;
   }
   """
+
+
   def compose(self) -> ComposeResult:
-    yield Button("switch", id="switch")
+    # yield Button("switch", id="switch")
+    with Horizontal():
+      yield Button("Deck Layout", id="deck_layout", flat=True)
+      yield Button("Device Health", id="device_health", flat=True)
+
+    yield Rule()
+
     with ContentSwitcher(id="main_content", initial="loading"):
       # yield Markdown("Home", id="home")
       yield LoadingIndicator(id="loading", classes="align")
-      yield Horizontal(id="alternate")
+      yield Placeholder(id="place")
 
-  @on(Button.Pressed, "#switch")
+  @on(Button.Pressed, "#deck_layout")
   def switch(self, event:Button.Pressed) -> None:
-    self.query_one(ContentSwitcher).current = "alternate"
+    self.query_one(ContentSwitcher).current = "place"
 
 class MainScreen(Screen):
   def compose(self) -> ComposeResult:
