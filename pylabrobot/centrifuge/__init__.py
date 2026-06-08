@@ -8,3 +8,4 @@ from .standard import (
   NotAtBucketError,
 )
 from .vspin_backend import Access2Backend, VSpinBackend
+from .hettich_rotanta_backend import HettichRotantaBackend
