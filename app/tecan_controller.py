@@ -20,6 +20,7 @@ from pylabrobot.resources import (
       DiTi_1000ul_CL_Filter_LiHa, #unsure if correct tip
       Microplate_96_Well #unsure if correct wellplate
       )
+from pylabrobot.visualizer import Visualizer
 
 class RobotController:
   def __init__(self, lh):

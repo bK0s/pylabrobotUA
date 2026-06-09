@@ -13,6 +13,7 @@ from textual import on
 from textual.worker import Worker
 
 from pylabrobot import __version__
+from pylabrobot.visualizer.visualizer import Visualizer
 
 import requests
 
