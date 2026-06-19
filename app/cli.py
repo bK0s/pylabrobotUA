@@ -12,6 +12,7 @@ from textual.screen import Screen
 from textual import on
 from textual.worker import Worker
 
+from cli.widgets.dpad import Dpad
 from pylabrobot import __version__
 from pylabrobot.visualizer.visualizer import Visualizer
 
@@ -38,7 +39,7 @@ MARKDOWN_TAB_DEVICES= '''
 
 MARKDOWN_TAB_HOME= f'''
 # PyLabRobot CLI \n
-Version: 0.0.0 \n
+Version: 0.0.0 (Development)\n
 PyLabRobot Version: {__version__} \n
 Github: \n
 Developed for use with PyLabRobot software at the University of Alberta
@@ -117,6 +118,9 @@ class MenuTabs(Horizontal):
     log = self.query_one("#log", RichLog)
     self.notify("Starting Controller...", severity="warning")
     log.write("*" * 5 + " Launching controller " + "*" * 5 + "\n")
+
+    # NOTE: Will run subprocess to completion
+    # FIX: Implement message passing
     proc = await asyncio.create_subprocess_shell("python3 pylabrobot/app/tecan_controller.py", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await proc.communicate()
     log.write("=" * 20 + f"\n[Tecan Robot] {stdout.decode()}\n" + "="*20 )
@@ -128,12 +132,7 @@ class MenuTabs(Horizontal):
     output = self.query_one("#log", RichLog)
     output.write("Starting Worker\n")
 
-    # proc = asyncio.create_subprocess_shell("python3 pylabrobot/app/tecan_controller.py", stdout=asyncio.subprocess.PIPE)
     self.run_worker(self._start_controller())
-    # content = self.query("#main_content", ContentSwitcher)
-    # content.current = "main_content"
-
-
 
   @on(Button.Pressed, "#ping")
   async def ping(self, event:Button.Pressed) -> None:
@@ -153,6 +152,11 @@ class MainContent(Widget):
       border: solid white;
       align: center middle;
   }
+
+  Container {
+    width: 0.75fr;
+    height: 1fr;
+  }
   """
 
 
@@ -167,7 +171,8 @@ class MainContent(Widget):
     with ContentSwitcher(id="main_content", initial="loading"):
       # yield Markdown("Home", id="home")
       yield LoadingIndicator(id="loading", classes="align")
-      yield Placeholder(id="place")
+      # yield Placeholder(id="place")
+      yield Container(Dpad(), id="place")
 
   @on(Button.Pressed, "#deck_layout")
   def switch(self, event:Button.Pressed) -> None:
