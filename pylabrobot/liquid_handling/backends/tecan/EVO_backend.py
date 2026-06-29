@@ -182,6 +182,10 @@ class EVOBackend(TecanLiquidHandler):
   ROMA = "C1"
   MCA = "W2"
   PNP = "W1"
+  TIU = "T6"
+  TIU_RAIL = "C3"
+  DECAPPER = "T2"
+  DECAP_RAIL = "O2"
 
   def __init__(
     self,
@@ -1536,6 +1540,142 @@ class RoMa(EVOArm):
     """
 
     await self.backend.send_command(module=self.module, command="STW", params=[wc, x, y, z, r, g])
+
+
+class Tiu(EVOArm):
+  """
+  Provides firmware commands for the TIU optical sensor unit (T6).
+  """
+
+  async def read_firmware_version(self) -> str:
+    resp = await self.backend.send_command(module=self.module, command="RFV")
+    return resp["data"][0]
+
+  async def initialize(self):
+    """Initialize TIU optical unit — runs homing/calibration. ~200ms response."""
+    await self.backend.send_command(module=self.module, command="PIA")
+
+  async def arm_photocell(self):
+    """Arm photoelectric sensor — prepare for scan. Send before every scan."""
+    await self.backend.send_command(module=self.module, command="APC")
+
+  async def scan(self) -> dict:
+    """Start scan — returns tube measurement data. ~10s response.
+
+    Returns:
+      dict with keys: liquid_level, separation_level, tube_content_height (all in encoder units)
+    """
+    resp = await self.backend.send_command(module=self.module, command="AST", read_timeout=15)
+    data = resp["data"]
+    return {
+      "liquid_level": data[0],
+      "separation_level": data[1],
+      "tube_content_height": data[2],
+    }
+
+  async def park(self):
+    """Park/lower sensor after scan. Send after every scan."""
+    await self.backend.send_command(module=self.module, command="APL")
+
+
+class TiuRail(EVOArm):
+  """
+  Provides firmware commands for the TIU rail controller (C3).
+  """
+
+  async def set_scale_factor(self, scale: int):
+    """Set scale factor for rail position encoder. Default -950."""
+    await self.backend.send_command(module=self.module, command="SLX", params=[scale])
+
+  async def set_end_speed(self, speed: int, accel: int):
+    """Set rail end speed and acceleration."""
+    await self.backend.send_command(module=self.module, command="SFX", params=[speed, accel])
+
+  async def set_start_speed(self, speed: int):
+    """Set rail start speed."""
+    await self.backend.send_command(module=self.module, command="SSX", params=[speed])
+
+  async def enable_axis(self):
+    """Enable rail axis / release brake."""
+    await self.backend.send_command(module=self.module, command="AWE")
+
+  async def home(self):
+    """Home rail to reference position. Takes ~4s."""
+    await self.backend.send_command(module=self.module, command="PIX", read_timeout=10)
+
+  async def move_absolute(self, pos: int):
+    """Move rail to absolute position in encoder units. 10 = IN (tube under sensor), 850 = OUT (park)."""
+    await self.backend.send_command(module=self.module, command="PAX", params=[pos])
+
+  async def move_to_in(self):
+    """Move rail to IN position (tube under sensor)."""
+    await self.move_absolute(10)
+
+  async def move_to_park(self):
+    """Move rail to OUT/park position."""
+    await self.move_absolute(850)
+
+
+class Decapper(EVOArm):
+  """
+  Provides firmware commands for the Decapper motor unit (T2).
+  """
+
+  async def read_firmware_version(self) -> str:
+    resp = await self.backend.send_command(module=self.module, command="RFV")
+    return resp["data"][0]
+
+  async def enable_outputs(self):
+    """Set output mode — enable decapper outputs. Required before initialize."""
+    await self.backend.send_command(module=self.module, command="SOM", params=[1, 1])
+
+  async def initialize(self):
+    """Initialize decapper — homing/calibration sequence. ~20s to complete."""
+    await self.backend.send_command(module=self.module, command="PIA", read_timeout=30)
+
+  async def lower_tool(self):
+    """Lower decap tool onto tube cap. First step of decap cycle."""
+    await self.backend.send_command(module=self.module, command="APL", params=[1])
+
+  async def actuate_twist(self):
+    """Actuate decap twist — removes the cap. ~5s."""
+    await self.backend.send_command(module=self.module, command="ADT", read_timeout=10)
+
+
+class DecapRail(EVOArm):
+  """
+  Provides firmware commands for the SMIO I/O module (O2) used for
+  Decapper slide valve control and tube sensors.
+  """
+
+  async def read_firmware_version(self) -> str:
+    resp = await self.backend.send_command(module=self.module, command="RFV")
+    return resp["data"][0]
+
+  async def set_output(self, pin: int, value: int):
+    """Set output pin on or off. pin=1 controls the pneumatic slide valve."""
+    await self.backend.send_command(module=self.module, command="SS0", params=[pin, value])
+
+  async def extend_slide_valve(self):
+    """Extend slide valve — clamps tube in position."""
+    await self.set_output(1, 1)
+
+  async def retract_slide_valve(self):
+    """Retract slide valve — releases tube."""
+    await self.set_output(1, 0)
+
+  async def read_input(self, pin: int) -> int:
+    """Read input pin state. Returns 1=active, 0=clear."""
+    resp = await self.backend.send_command(module=self.module, command="RSI", params=[pin])
+    return resp["data"][0]
+
+  async def read_front_sensor(self) -> int:
+    """Read front sensor (tube present). Returns 1=active, 0=clear."""
+    return await self.read_input(1)
+
+  async def read_rear_sensor(self) -> int:
+    """Read rear sensor (cap removed confirmation). Returns 1=active, 0=clear."""
+    return await self.read_input(2)
 
 
 # Deprecated alias with warning # TODO: remove mid May 2025 (giving people 1 month to update)
