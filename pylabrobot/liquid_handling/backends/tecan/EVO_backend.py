@@ -296,21 +296,27 @@ class EVOBackend(TecanLiquidHandler):
       self.pnp = PnP(self, EVOBackend.PNP)
       await self.pnp.position_initialization_x()
 
-    self._num_channels = await self.liha.report_number_tips()
-    self._x_range = await self.liha.report_x_param(5)
-    self._y_range = (await self.liha.report_y_param(5))[0]
-    self._z_range = (await self.liha.report_z_param(5))[0]
+    self.tiu = Tiu(self, EVOBackend.TIU)
+    self.tiu_rail = TiuRail(self, EVOBackend.TIU_RAIL)
+    self.decapper = Decapper(self, EVOBackend.DECAPPER)
+    self.decap_rail = DecapRail(self, EVOBackend.DECAP_RAIL)
 
-    # Initialize plungers. Assumes wash station assigned at rail 1.
-    await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
-    await self.liha.position_absolute_all_axis(45, 1031, 90, [1200] * self.num_channels)
-    await self.liha.initialize_plunger(self._bin_use_channels(list(range(self.num_channels))))
-    await self.liha.position_valve_logical([1] * self.num_channels)
-    await self.liha.move_plunger_relative([100] * self.num_channels)
-    await self.liha.position_valve_logical([0] * self.num_channels)
-    await self.liha.set_end_speed_plunger([1800] * self.num_channels)
-    await self.liha.move_plunger_relative([-100] * self.num_channels)
-    await self.liha.position_absolute_all_axis(45, 1031, 90, [self._z_range] * self.num_channels)
+    if self.liha_connected:
+      self._num_channels = await self.liha.report_number_tips()
+      self._x_range = await self.liha.report_x_param(5)
+      self._y_range = (await self.liha.report_y_param(5))[0]
+      self._z_range = (await self.liha.report_z_param(5))[0]
+
+      # Initialize plungers. Assumes wash station assigned at rail 1.
+      await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
+      await self.liha.position_absolute_all_axis(45, 1031, 90, [1200] * self.num_channels)
+      await self.liha.initialize_plunger(self._bin_use_channels(list(range(self.num_channels))))
+      await self.liha.position_valve_logical([1] * self.num_channels)
+      await self.liha.move_plunger_relative([100] * self.num_channels)
+      await self.liha.position_valve_logical([0] * self.num_channels)
+      await self.liha.set_end_speed_plunger([1800] * self.num_channels)
+      await self.liha.move_plunger_relative([-100] * self.num_channels)
+      await self.liha.position_absolute_all_axis(45, 1031, 90, [self._z_range] * self.num_channels)
 
   async def setup_arm(self, module):
     try:
