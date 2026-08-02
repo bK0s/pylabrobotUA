@@ -180,8 +180,12 @@ class EVOBackend(TecanLiquidHandler):
 
   LIHA = "C5"
   ROMA = "C1"
-  MCA = "W1"
-  PNP = "W2"
+  MCA = "W2"
+  PNP = "W1"
+  TIU = "T6"
+  TIU_RAIL = "C3"
+  DECAPPER = "T2"
+  DECAP_RAIL = "O2"
 
   def __init__(
     self,
@@ -269,6 +273,7 @@ class EVOBackend(TecanLiquidHandler):
 
     await super().setup()
 
+    self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
     self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
     self._mca_connected = await self.setup_arm(EVOBackend.MCA)
     self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
@@ -279,13 +284,17 @@ class EVOBackend(TecanLiquidHandler):
       # move to home position (TBD) after initialization
       await self._park_roma()
     if self.mca_connected:
-      self.mca = Mca(self, EVO.MCA)
+      self.mca = Mca(self, EVOBackend.MCA)
       # await self.mca.position_initialization_x() # function does not work for mca.
       await self._park_mca()
 
     if self.liha_connected:
       self.liha = LiHa(self, EVOBackend.LIHA)
       await self.liha.position_initialization_x()
+
+    if self.pnp_connected:
+      self.pnp = PnP(self, EVOBackend.PNP)
+      await self.pnp.position_initialization_x()
 
     self._num_channels = await self.liha.report_number_tips()
     self._x_range = await self.liha.report_x_param(5)
@@ -305,7 +314,7 @@ class EVOBackend(TecanLiquidHandler):
 
   async def setup_arm(self, module):
     try:
-      if module == EVO.MCA:
+      if module == EVOBackend.MCA:
         await self.send_command(module, command="PIB")
 
       await self.send_command(module, command="PIA")
@@ -314,7 +323,7 @@ class EVOBackend(TecanLiquidHandler):
         return False
       raise e
 
-    if module != EVO.MCA:
+    if module != EVOBackend.MCA:
       await self.send_command(module, command="BMX", params=[2])
 
     return True
@@ -332,20 +341,24 @@ class EVOBackend(TecanLiquidHandler):
     # TODO CHANGE TO USE CORRECT FUNCTIONS
 
     # Ensure MCA is initialized before moving
-    await self.send_command(EVO.MCA, command="PIA")
+    await self.send_command(EVOBackend.MCA, command="PIA")
     await asyncio.sleep(0.5)
 
     # Raise MCA Z-axis first to avoid collision
-    await self.send_command(EVO.MCA, command="PAA", params=[None, None, 2000])  # Raise Z-axis
+    await self.send_command(EVOBackend.MCA, command="PAA", params=[None, None, 2000])  # Raise Z-axis
     await asyncio.sleep(1)
 
     # Move MCA to parking position (adjust X, Y as needed)
-    await self.send_command(EVO.MCA, command="PAA", params=[6000, 1000, None])
+    await self.send_command(EVOBackend.MCA, command="PAA", params=[6000, 1000, None])
     await asyncio.sleep(1)
 
     # Stop movement to prevent drifting
-    await self.send_command(EVO.MCA, command="BMA", params=[0, 0, 0])
+    await self.send_command(EVOBackend.MCA, command="BMA", params=[0, 0, 0])
     await asyncio.sleep(0.5)
+
+  async def _park_pnp(self):
+    await self.pnp.set_z_travel_height(self._z_range)
+    await self.pnp.position_absolute_all(-100, -700, z=None, r=0, g=280)
 
   # ============== LiquidHandlerBackend methods ==============
 
@@ -1207,6 +1220,143 @@ class Mca(EVOArm):
   pass
 
 
+class PnP(EVOArm):
+  """
+  Provides firmware commands for the Pick & Place (PnP) arm.
+  """
+
+  async def fake_initialize(self):
+    await self.backend.send_command(module=self.module, command="PIF")
+
+  async def initialize(self):
+    await self.backend.send_command(module=self.module, command="PIA")
+
+  async def initialize_x(self, speed: int = None):
+    await self.backend.send_command(self.module, "PIX", [speed])
+
+  async def initialize_y(self, speed: int = None):
+    await self.backend.send_command(self.module, "PIY", [speed])
+
+  async def initialize_z(self, speed: int = None):
+    await self.backend.send_command(self.module, "PIZ", [speed])
+
+  async def initialize_dependent_axes(self):
+    await self.backend.send_command(self.module, "PIR")
+
+  async def position_absolute_x(self, x: int):
+    await self.backend.send_command(self.module, "PAX", [x])
+
+  async def position_absolute_y(self, y: int):
+    await self.backend.send_command(self.module, "PAY", [y])
+
+  async def position_absolute_z(self, z: int):
+    await self.backend.send_command(self.module, "PAZ", [z])
+
+  async def position_absolute_r(self, r: int):
+    await self.backend.send_command(self.module, "PAR", [r])
+
+  async def position_absolute_g(self, g: int):
+    await self.backend.send_command(self.module, "PAG", [g])
+
+  async def position_relative_x(self, x: int):
+    await self.backend.send_command(self.module, "PRX", [x])
+
+  async def position_relative_y(self, y: int):
+    await self.backend.send_command(self.module, "PRY", [y])
+
+  async def position_relative_z(self, z: int):
+    await self.backend.send_command(self.module, "PRZ", [z])
+
+  async def position_relative_r(self, r: int):
+    await self.backend.send_command(self.module, "PRR", [r])
+
+  async def position_relative_g(self, g: int):
+    await self.backend.send_command(self.module, "PRG", [g])
+
+  async def position_absolute_all(self, x=None, y=None, z=None, r=None, g=None):
+    await self.backend.send_command(self.module, "PAA", [x, y, z, r, g])
+
+  async def position_relative_all(self, x=None, y=None, z=None, r=None, g=None):
+    await self.backend.send_command(self.module, "PRA", [x, y, z, r, g])
+
+  async def move_absolute_slow(self, x=None, y=None, z=None, r=None, g=None):
+    await self.backend.send_command(self.module, "MAA", [x, y, z, r, g])
+
+  async def move_relative_slow(self, x=None, y=None, z=None, r=None, g=None):
+    await self.backend.send_command(self.module, "MRA", [x, y, z, r, g])
+
+  async def set_z_travel_height(self, z: int):
+    await self.backend.send_command(self.module, "SHZ", [z])
+
+  async def grip_tube(self, grip_search: int, grip_open: int):
+    await self.backend.send_command(self.module, "AGR", [grip_search, grip_open])
+
+  async def pick_tube(self, grip_search: int, grip_open: int, z_pick: int, z_up: int, rotation: int, rot_comp: int):
+    await self.backend.send_command(self.module, "APC", [grip_search, grip_open, z_pick, z_up, rotation, rot_comp])
+
+  async def place_tube(self, grip_open: int, z_place: int, z_up: int, rotation: int, tube_check: int, wipe_off_dist: int, tube_left_check: int):
+    await self.backend.send_command(self.module, "APL", [grip_open, z_place, z_up, rotation, tube_check, wipe_off_dist, tube_left_check])
+
+  async def teach_diameter(self, diameter: int):
+    await self.backend.send_command(self.module, "ATD", [diameter])
+
+  async def auto_range_x(self):
+    await self.backend.send_command(self.module, "ARX")
+
+  async def auto_range_y(self):
+    await self.backend.send_command(self.module, "ARY")
+
+  async def auto_range_z(self):
+    await self.backend.send_command(self.module, "ARZ")
+
+  async def set_grip_params(self, pwm_limit: int, grip_speed: int, min_space: int, max_space: int):
+    await self.backend.send_command(self.module, "SGP", [pwm_limit, grip_speed, min_space, max_space])
+
+  async def set_fast_speed_x(self, end_speed: int, accel: int):
+    await self.backend.send_command(self.module, "SFX", [end_speed, accel])
+
+  async def set_fast_speed_y(self, end_speed: int, accel: int):
+    await self.backend.send_command(self.module, "SFY", [end_speed, accel])
+
+  async def set_fast_speed_z(self, end_speed: int, accel: int):
+    await self.backend.send_command(self.module, "SFZ", [end_speed, accel])
+
+  async def set_fast_speed_r(self, end_speed: int, accel: int):
+    await self.backend.send_command(self.module, "SFR", [end_speed, accel])
+
+  async def report_x_param(self, selector: int) -> int:
+    resp = await self.backend.send_command(self.module, "RPX", [selector])
+    return resp["data"][0]
+
+  async def report_y_param(self, selector: int) -> int:
+    resp = await self.backend.send_command(self.module, "RPY", [selector])
+    return resp["data"][0]
+
+  async def report_z_param(self, selector: int) -> int:
+    resp = await self.backend.send_command(self.module, "RPZ", [selector])
+    return resp["data"][0]
+
+  async def report_r_param(self, selector: int) -> int:
+    resp = await self.backend.send_command(self.module, "RPR", [selector])
+    return resp["data"][0]
+
+  async def report_g_param(self, selector: int) -> int:
+    resp = await self.backend.send_command(self.module, "RPG", [selector])
+    return resp["data"][0]
+
+  async def report_gripper_param(self, selector: int) -> int:
+    resp = await self.backend.send_command(self.module, "RGP", [selector])
+    return resp["data"][0]
+
+  async def report_tube_diameter(self) -> int:
+    resp = await self.backend.send_command(self.module, "RTD")
+    return resp["data"][0]
+
+  async def report_displacement_x(self) -> int:
+    resp = await self.backend.send_command(self.module, "RXD")
+    return resp["data"][0]
+
+
 class RoMa(EVOArm):
   """
   Provides firmware commands for the RoMa plate robot
@@ -1390,6 +1540,142 @@ class RoMa(EVOArm):
     """
 
     await self.backend.send_command(module=self.module, command="STW", params=[wc, x, y, z, r, g])
+
+
+class Tiu(EVOArm):
+  """
+  Provides firmware commands for the TIU optical sensor unit (T6).
+  """
+
+  async def read_firmware_version(self) -> str:
+    resp = await self.backend.send_command(module=self.module, command="RFV")
+    return resp["data"][0]
+
+  async def initialize(self):
+    """Initialize TIU optical unit — runs homing/calibration. ~200ms response."""
+    await self.backend.send_command(module=self.module, command="PIA")
+
+  async def arm_photocell(self):
+    """Arm photoelectric sensor — prepare for scan. Send before every scan."""
+    await self.backend.send_command(module=self.module, command="APC")
+
+  async def scan(self) -> dict:
+    """Start scan — returns tube measurement data. ~10s response.
+
+    Returns:
+      dict with keys: liquid_level, separation_level, tube_content_height (all in encoder units)
+    """
+    resp = await self.backend.send_command(module=self.module, command="AST", read_timeout=15)
+    data = resp["data"]
+    return {
+      "liquid_level": data[0],
+      "separation_level": data[1],
+      "tube_content_height": data[2],
+    }
+
+  async def park(self):
+    """Park/lower sensor after scan. Send after every scan."""
+    await self.backend.send_command(module=self.module, command="APL")
+
+
+class TiuRail(EVOArm):
+  """
+  Provides firmware commands for the TIU rail controller (C3).
+  """
+
+  async def set_scale_factor(self, scale: int):
+    """Set scale factor for rail position encoder. Default -950."""
+    await self.backend.send_command(module=self.module, command="SLX", params=[scale])
+
+  async def set_end_speed(self, speed: int, accel: int):
+    """Set rail end speed and acceleration."""
+    await self.backend.send_command(module=self.module, command="SFX", params=[speed, accel])
+
+  async def set_start_speed(self, speed: int):
+    """Set rail start speed."""
+    await self.backend.send_command(module=self.module, command="SSX", params=[speed])
+
+  async def enable_axis(self):
+    """Enable rail axis / release brake."""
+    await self.backend.send_command(module=self.module, command="AWE")
+
+  async def home(self):
+    """Home rail to reference position. Takes ~4s."""
+    await self.backend.send_command(module=self.module, command="PIX", read_timeout=10)
+
+  async def move_absolute(self, pos: int):
+    """Move rail to absolute position in encoder units. 10 = IN (tube under sensor), 850 = OUT (park)."""
+    await self.backend.send_command(module=self.module, command="PAX", params=[pos])
+
+  async def move_to_in(self):
+    """Move rail to IN position (tube under sensor)."""
+    await self.move_absolute(10)
+
+  async def move_to_park(self):
+    """Move rail to OUT/park position."""
+    await self.move_absolute(850)
+
+
+class Decapper(EVOArm):
+  """
+  Provides firmware commands for the Decapper motor unit (T2).
+  """
+
+  async def read_firmware_version(self) -> str:
+    resp = await self.backend.send_command(module=self.module, command="RFV")
+    return resp["data"][0]
+
+  async def enable_outputs(self):
+    """Set output mode — enable decapper outputs. Required before initialize."""
+    await self.backend.send_command(module=self.module, command="SOM", params=[1, 1])
+
+  async def initialize(self):
+    """Initialize decapper — homing/calibration sequence. ~20s to complete."""
+    await self.backend.send_command(module=self.module, command="PIA", read_timeout=30)
+
+  async def lower_tool(self):
+    """Lower decap tool onto tube cap. First step of decap cycle."""
+    await self.backend.send_command(module=self.module, command="APL", params=[1])
+
+  async def actuate_twist(self):
+    """Actuate decap twist — removes the cap. ~5s."""
+    await self.backend.send_command(module=self.module, command="ADT", read_timeout=10)
+
+
+class DecapRail(EVOArm):
+  """
+  Provides firmware commands for the SMIO I/O module (O2) used for
+  Decapper slide valve control and tube sensors.
+  """
+
+  async def read_firmware_version(self) -> str:
+    resp = await self.backend.send_command(module=self.module, command="RFV")
+    return resp["data"][0]
+
+  async def set_output(self, pin: int, value: int):
+    """Set output pin on or off. pin=1 controls the pneumatic slide valve."""
+    await self.backend.send_command(module=self.module, command="SS0", params=[pin, value])
+
+  async def extend_slide_valve(self):
+    """Extend slide valve — clamps tube in position."""
+    await self.set_output(1, 1)
+
+  async def retract_slide_valve(self):
+    """Retract slide valve — releases tube."""
+    await self.set_output(1, 0)
+
+  async def read_input(self, pin: int) -> int:
+    """Read input pin state. Returns 1=active, 0=clear."""
+    resp = await self.backend.send_command(module=self.module, command="RSI", params=[pin])
+    return resp["data"][0]
+
+  async def read_front_sensor(self) -> int:
+    """Read front sensor (tube present). Returns 1=active, 0=clear."""
+    return await self.read_input(1)
+
+  async def read_rear_sensor(self) -> int:
+    """Read rear sensor (cap removed confirmation). Returns 1=active, 0=clear."""
+    return await self.read_input(2)
 
 
 # Deprecated alias with warning # TODO: remove mid May 2025 (giving people 1 month to update)
