@@ -736,7 +736,7 @@
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pylabrobot.byonoy</span><span class="w"> </span><span class="kn">import</span> <span class="n">byonoy_l96</span>
 
-<span class="n">base</span><span class="p">,</span> <span class="n">reader</span> <span class="o">=</span> <span class="n">byonoy_l96</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;l96&quot;</span><span class="p">)</span>
+<span class="n">base</span><span class="p">,</span> <span class="n">reader</span> <span class="o">=</span> <span class="n">byonoy_l96</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"l96"</span><span class="p">)</span>
 <span class="k">await</span> <span class="n">reader</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
 <span class="n">drv</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">driver</span>
 </pre></div>
@@ -796,10 +796,10 @@
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">await</span> <span class="n">drv</span><span class="o">.</span><span class="n">set_led_color</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="s2">&quot;breathing&quot;</span><span class="p">,</span> <span class="n">duration_ms</span><span class="o">=</span><span class="mi">6000</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">await</span> <span class="n">drv</span><span class="o">.</span><span class="n">set_led_color</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="s2">"breathing"</span><span class="p">,</span> <span class="n">duration_ms</span><span class="o">=</span><span class="mi">6000</span><span class="p">)</span>
 <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
 
-<span class="k">await</span> <span class="n">drv</span><span class="o">.</span><span class="n">set_led_color</span><span class="p">((</span><span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">),</span> <span class="s2">&quot;cylon&quot;</span><span class="p">,</span> <span class="n">duration_ms</span><span class="o">=</span><span class="mi">4000</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">await</span> <span class="n">drv</span><span class="o">.</span><span class="n">set_led_color</span><span class="p">((</span><span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">),</span> <span class="s2">"cylon"</span><span class="p">,</span> <span class="n">duration_ms</span><span class="o">=</span><span class="mi">4000</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
 
 <span class="k">await</span> <span class="n">drv</span><span class="o">.</span><span class="n">set_led_color</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>   <span class="c1"># back to off</span>

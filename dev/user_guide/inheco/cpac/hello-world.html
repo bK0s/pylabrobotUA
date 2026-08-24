@@ -756,7 +756,7 @@
 <span class="n">control_box</span> <span class="o">=</span> <span class="n">InhecoTECControlBox</span><span class="p">()</span>
 <span class="k">await</span> <span class="n">control_box</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
 
-<span class="n">cpac</span> <span class="o">=</span> <span class="n">inheco_cpac_ultraflat</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;cpac&quot;</span><span class="p">,</span> <span class="n">control_box</span><span class="o">=</span><span class="n">control_box</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">cpac</span> <span class="o">=</span> <span class="n">inheco_cpac_ultraflat</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"cpac"</span><span class="p">,</span> <span class="n">control_box</span><span class="o">=</span><span class="n">control_box</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -774,7 +774,7 @@
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">current</span> <span class="o">=</span> <span class="k">await</span> <span class="n">cpac</span><span class="o">.</span><span class="n">request_current_temperature</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">current</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> </span><span class="se">\u00b0</span><span class="s2">C&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">current</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> </span><span class="se">\u00b0</span><span class="s2">C"</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -792,7 +792,7 @@
 <p>With an MTC control box, use different <code class="docutils literal notranslate"><span class="pre">index</span></code> values (1–6) to address multiple CPACs:</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cpac2</span> <span class="o">=</span> <span class="n">inheco_cpac_ultraflat</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;cpac2&quot;</span><span class="p">,</span> <span class="n">control_box</span><span class="o">=</span><span class="n">control_box</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cpac2</span> <span class="o">=</span> <span class="n">inheco_cpac_ultraflat</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"cpac2"</span><span class="p">,</span> <span class="n">control_box</span><span class="o">=</span><span class="n">control_box</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>

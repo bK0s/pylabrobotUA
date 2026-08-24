@@ -752,7 +752,7 @@
 <div class="cell_input docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pylabrobot.kbiosystems</span><span class="w"> </span><span class="kn">import</span> <span class="n">KBiosystemsUltrasealPRO</span>
 
-<span class="n">sealer</span> <span class="o">=</span> <span class="n">KBiosystemsUltrasealPRO</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="s2">&quot;/dev/ttyUSB0&quot;</span><span class="p">)</span>  <span class="c1"># replace with your port</span>
+<span class="n">sealer</span> <span class="o">=</span> <span class="n">KBiosystemsUltrasealPRO</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="s2">"/dev/ttyUSB0"</span><span class="p">)</span>  <span class="c1"># replace with your port</span>
 <span class="k">await</span> <span class="n">sealer</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -776,7 +776,7 @@
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">await</span> <span class="n">sealer</span><span class="o">.</span><span class="n">set_temperature</span><span class="p">(</span><span class="mi">160</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Current temperature:&quot;</span><span class="p">,</span> <span class="k">await</span> <span class="n">sealer</span><span class="o">.</span><span class="n">request_temperature</span><span class="p">(),</span> <span class="s2">&quot;C&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"Current temperature:"</span><span class="p">,</span> <span class="k">await</span> <span class="n">sealer</span><span class="o">.</span><span class="n">request_temperature</span><span class="p">(),</span> <span class="s2">"C"</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -787,7 +787,7 @@
 <p>Read the status byte as a set of flags. On the Ultraseal PRO this includes <code class="docutils literal notranslate"><span class="pre">LowAir</span></code>, which indicates the compressed air supply is insufficient, and <code class="docutils literal notranslate"><span class="pre">ParkMode</span></code>, which indicates the shuttle is parked inside.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Status:&quot;</span><span class="p">,</span> <span class="k">await</span> <span class="n">sealer</span><span class="o">.</span><span class="n">request_status</span><span class="p">())</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">"Status:"</span><span class="p">,</span> <span class="k">await</span> <span class="n">sealer</span><span class="o">.</span><span class="n">request_status</span><span class="p">())</span>
 </pre></div>
 </div>
 </div>

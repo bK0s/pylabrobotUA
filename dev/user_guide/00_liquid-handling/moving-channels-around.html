@@ -737,8 +737,8 @@
 <span class="k">await</span> <span class="n">lh</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
 
 <span class="c1"># assign a tip rack</span>
-<span class="n">tip_carrier</span> <span class="o">=</span> <span class="n">TIP_CAR_480_A00</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;tip_carrier&quot;</span><span class="p">)</span>
-<span class="n">tip_carrier</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">tip_rack</span> <span class="o">=</span> <span class="n">hamilton_96_tiprack_1000uL_filter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;tip_rack&quot;</span><span class="p">)</span>
+<span class="n">tip_carrier</span> <span class="o">=</span> <span class="n">TIP_CAR_480_A00</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"tip_carrier"</span><span class="p">)</span>
+<span class="n">tip_carrier</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">tip_rack</span> <span class="o">=</span> <span class="n">hamilton_96_tiprack_1000uL_filter</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"tip_rack"</span><span class="p">)</span>
 <span class="n">lh</span><span class="o">.</span><span class="n">deck</span><span class="o">.</span><span class="n">assign_child_resource</span><span class="p">(</span><span class="n">tip_carrier</span><span class="p">,</span> <span class="n">rails</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -758,7 +758,7 @@
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">channel</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># the channel to use</span>
 
 <span class="c1"># start by picking up a single tip</span>
-<span class="k">await</span> <span class="n">lh</span><span class="o">.</span><span class="n">pick_up_tips</span><span class="p">(</span><span class="n">tip_rack</span><span class="p">[</span><span class="s2">&quot;A1&quot;</span><span class="p">],</span> <span class="n">use_channels</span><span class="o">=</span><span class="p">[</span><span class="n">channel</span><span class="p">])</span>
+<span class="k">await</span> <span class="n">lh</span><span class="o">.</span><span class="n">pick_up_tips</span><span class="p">(</span><span class="n">tip_rack</span><span class="p">[</span><span class="s2">"A1"</span><span class="p">],</span> <span class="n">use_channels</span><span class="o">=</span><span class="p">[</span><span class="n">channel</span><span class="p">])</span>
 
 <span class="c1"># prepare for manual operation</span>
 <span class="c1"># this will space the other channels to safe positions</span>
@@ -773,7 +773,7 @@
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">z_safe</span> <span class="o">=</span> <span class="mi">240</span>  <span class="c1"># WARNING: this might NOT be safe for your setup</span>
 
 <span class="k">if</span> <span class="n">z_safe</span> <span class="o">&lt;=</span> <span class="n">lh</span><span class="o">.</span><span class="n">deck</span><span class="o">.</span><span class="n">get_highest_known_point</span><span class="p">():</span>
-  <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;z_safe position is not safe, it is lower than the highest known point: </span><span class="si">{</span><span class="n">lh</span><span class="o">.</span><span class="n">deck</span><span class="o">.</span><span class="n">get_highest_known_point</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+  <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"z_safe position is not safe, it is lower than the highest known point: </span><span class="si">{</span><span class="n">lh</span><span class="o">.</span><span class="n">deck</span><span class="o">.</span><span class="n">get_highest_known_point</span><span class="p">()</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 <span class="k">await</span> <span class="n">lh</span><span class="o">.</span><span class="n">move_channel_z</span><span class="p">(</span><span class="n">channel</span><span class="p">,</span> <span class="n">z_safe</span><span class="p">)</span>
 </pre></div>

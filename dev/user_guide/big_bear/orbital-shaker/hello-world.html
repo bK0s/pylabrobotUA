@@ -771,7 +771,7 @@ If you verify it on a shaker, please open a PR to remove the not-tested warning.
 <div class="cell_input docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pylabrobot.big_bear</span><span class="w"> </span><span class="kn">import</span> <span class="n">BigBearOrbitalShaker</span>
 
-<span class="n">shaker</span> <span class="o">=</span> <span class="n">BigBearOrbitalShaker</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="s2">&quot;/dev/ttyUSB0&quot;</span><span class="p">,</span> <span class="n">num_shakers</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># replace with your port</span>
+<span class="n">shaker</span> <span class="o">=</span> <span class="n">BigBearOrbitalShaker</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="s2">"/dev/ttyUSB0"</span><span class="p">,</span> <span class="n">num_shakers</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># replace with your port</span>
 <span class="k">await</span> <span class="n">shaker</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -786,7 +786,7 @@ If you verify it on a shaker, please open a PR to remove the not-tested warning.
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">await</span> <span class="n">shaker</span><span class="o">.</span><span class="n">start_shaking</span><span class="p">(</span>
     <span class="n">rpm</span><span class="o">=</span><span class="mi">750</span><span class="p">,</span>
     <span class="n">acceleration</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-    <span class="n">sequence</span><span class="o">=</span><span class="s2">&quot;CW&quot;</span><span class="p">,</span>
+    <span class="n">sequence</span><span class="o">=</span><span class="s2">"CW"</span><span class="p">,</span>
     <span class="n">device_id</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
@@ -814,7 +814,7 @@ If you verify it on a shaker, please open a PR to remove the not-tested warning.
 <div class="cell_input docutils container">
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Example for a 3-nest chain (create with num_shakers=3)</span>
 <span class="c1"># await shaker.start_shaking(rpm=500, device_id=1)</span>
-<span class="c1"># await shaker.start_shaking(rpm=900, sequence=&quot;CCW&quot;, device_id=2)</span>
+<span class="c1"># await shaker.start_shaking(rpm=900, sequence="CCW", device_id=2)</span>
 <span class="c1"># await shaker.start_shaking(rpm=1200, device_id=3)</span>
 </pre></div>
 </div>
@@ -839,7 +839,7 @@ If you verify it on a shaker, please open a PR to remove the not-tested warning.
 <p>Read a nest’s serial-number fields (<code class="docutils literal notranslate"><span class="pre">Y</span></code>, <code class="docutils literal notranslate"><span class="pre">X</span></code>, <code class="docutils literal notranslate"><span class="pre">Z</span></code>). The reply format is device-defined; the raw fields are returned joined.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Serial number:&quot;</span><span class="p">,</span> <span class="k">await</span> <span class="n">shaker</span><span class="o">.</span><span class="n">get_serial_number</span><span class="p">(</span><span class="n">device_id</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">"Serial number:"</span><span class="p">,</span> <span class="k">await</span> <span class="n">shaker</span><span class="o">.</span><span class="n">get_serial_number</span><span class="p">(</span><span class="n">device_id</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
 </pre></div>
 </div>
 </div>
