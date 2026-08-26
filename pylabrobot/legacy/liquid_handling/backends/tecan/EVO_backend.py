@@ -224,7 +224,10 @@ class TecanLiquidHandler(LiquidHandlerBackend, metaclass=ABCMeta):
       buf += chunk
       if buf.endswith(_FRAME_TERMINATOR):
         return bytes(buf)
-    raise TimeoutError(f"Timeout while reading from Tecan EVO on serial port '{self.io.port}'.")
+    raise TimeoutError(
+      f"Timeout while reading from Tecan EVO on serial port '{self.io.port}'. "
+      f"Received {len(buf)} byte(s) before giving up: {bytes(buf)!r}"
+    )
 
   async def setup(self):
     await super().setup()
@@ -252,11 +255,12 @@ class EVOBackend(TecanLiquidHandler):
     self,
     diti_count: int = 0,
     packet_read_timeout: int = 12,
-    read_timeout: int = 60,
+    read_timeout: int = 150,
     write_timeout: int = 60,
     connection: Literal["usb", "serial"] = "usb",
     serial_port: Optional[str] = None,
     serial_baudrate: int = 9600,
+    has_mca: bool = False,
   ):
     """Create a new EVO interface.
 
@@ -269,6 +273,11 @@ class EVOBackend(TecanLiquidHandler):
       serial_port: Explicit serial port path, used only when `connection="serial"`. If
         omitted, the port is auto-detected from the adapter's VID/PID.
       serial_baudrate: Baud rate to use when `connection="serial"`.
+      has_mca: Whether an MCA arm is physically installed on this robot. Defaults to False
+        (most EVO configurations, including this one, don't have one) — when False, `setup`
+        never sends it a command, since an absent module doesn't reliably respond with a
+        recognizable "not present" error code (e.g. it may return "Invalid command" instead
+        of "Device not implemented").
     """
 
     super().__init__(
@@ -280,6 +289,7 @@ class EVOBackend(TecanLiquidHandler):
       serial_baudrate=serial_baudrate,
     )
 
+    self._has_mca = has_mca
     self._num_channels: Optional[int] = None
     self.diti_count = diti_count
     # channels [num_channels - diti_count, num_channels) configured for disposable tips
@@ -347,7 +357,7 @@ class EVOBackend(TecanLiquidHandler):
 
     self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
     self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
-    self._mca_connected = await self.setup_arm(EVOBackend.MCA)
+    self._mca_connected = await self.setup_arm(EVOBackend.MCA) if self._has_mca else False
     self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
 
     if self.roma_connected:  # position_initialization_x in reverse order from setup_arm

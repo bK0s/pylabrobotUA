@@ -18,6 +18,21 @@ class TecanError(Exception):
     return f"{self.__class__.__name__}('{self.message}')"
 
 
+# Base error codes shared by every Tecan module's firmware (identical across the C5 and C1
+# tables below for codes 1-8) — used as a fallback for modules without their own full table
+# (e.g. W1/PnP, W2/MCA, T6/TIU, T2/Decapper).
+_BASE_CODES = {
+  1: "Initialization failed",
+  2: "Invalid command",
+  3: "Invalid operand",
+  4: "CAN acknowledge problems",
+  5: "Device not implemented",
+  6: "CAN answer timeout",
+  7: "Device not initialized",
+  8: "Command overflow of TeCU",
+}
+
+
 def error_code_to_exception(module: str, error_code: int) -> TecanError:
   """Convert an error code to an exception"""
   table = None
@@ -79,5 +94,8 @@ def error_code_to_exception(module: str, error_code: int) -> TecanError:
 
   if table is not None and error_code in table:
     return TecanError(table[error_code], module, error_code)
+
+  if error_code in _BASE_CODES:
+    return TecanError(_BASE_CODES[error_code], module, error_code)
 
   return TecanError(f"Unknown error code {error_code}", module, error_code)
