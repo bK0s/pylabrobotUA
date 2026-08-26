@@ -1,8 +1,10 @@
 import asyncio
+import time
 from abc import ABCMeta, abstractmethod
 from typing import (
   Dict,
   List,
+  Literal,
   Optional,
   Sequence,
   Tuple,
@@ -10,19 +12,20 @@ from typing import (
   Union,
 )
 
+from pylabrobot.io.serial import Serial
 from pylabrobot.io.usb import USB
-from pylabrobot.liquid_handling.backends.backend import (
+from pylabrobot.legacy.liquid_handling.backends.backend import (
   LiquidHandlerBackend,
 )
-from pylabrobot.liquid_handling.backends.tecan.errors import (
+from pylabrobot.legacy.liquid_handling.backends.tecan.errors import (
   TecanError,
   error_code_to_exception,
 )
-from pylabrobot.liquid_handling.liquid_classes.tecan import (
+from pylabrobot.legacy.liquid_handling.liquid_classes.tecan import (
   TecanLiquidClass,
   get_liquid_class,
 )
-from pylabrobot.liquid_handling.standard import (
+from pylabrobot.legacy.liquid_handling.standard import (
   Drop,
   DropTipRack,
   MultiHeadAspirationContainer,
@@ -52,6 +55,18 @@ from pylabrobot.resources import (
 
 T = TypeVar("T")
 
+# Frame terminator used by `_assemble_command`/`parse_response` (see below). Over USB this
+# doesn't matter for reading — a bulk transfer already delivers one message per `read()` — but
+# a raw serial byte stream has no such framing, so `_read_serial_frame` has to scan for this
+# byte itself to know where a response ends.
+_FRAME_TERMINATOR = b"\x00"
+
+# Default VID/PID for the RS232-over-USB adapter this was tested with (a Prolific PL2303
+# cable). Any adapter using the same chipset will match; a different chipset (FTDI, CH340,
+# ...) won't, so pass `serial_port` explicitly to bypass this lookup entirely.
+_DEFAULT_SERIAL_VID = 0x067B
+_DEFAULT_SERIAL_PID = 0x2303
+
 
 class TecanLiquidHandler(LiquidHandlerBackend, metaclass=ABCMeta):
   """
@@ -64,23 +79,46 @@ class TecanLiquidHandler(LiquidHandlerBackend, metaclass=ABCMeta):
     packet_read_timeout: int = 120,
     read_timeout: int = 300,
     write_timeout: int = 300,
+    connection: Literal["usb", "serial"] = "usb",
+    serial_port: Optional[str] = None,
+    serial_baudrate: int = 9600,
   ):
     """
 
     Args:
       packet_read_timeout: The timeout for reading packets from the Tecan machine in seconds.
       read_timeout: The timeout for reading from the Tecan machine in seconds.
+      connection: "usb" for a native USB connection, "serial" for a direct RS232 link (or one
+        made through a USB-to-serial adapter).
+      serial_port: Explicit serial port path (e.g. "/dev/ttyUSB0"), used only when
+        `connection="serial"`. If omitted, the port is auto-detected by scanning for a
+        USB-to-serial adapter matching `_DEFAULT_SERIAL_VID`/`_DEFAULT_SERIAL_PID`.
+      serial_baudrate: Baud rate to use when `connection="serial"`.
     """
 
     super().__init__()
-    self.io = USB(
-      human_readable_device_name="Tecan EVO",
-      packet_read_timeout=packet_read_timeout,
-      read_timeout=read_timeout,
-      write_timeout=write_timeout,
-      id_vendor=0x0C47,
-      id_product=0x4000,
-    )
+    self._read_timeout = read_timeout
+    self.io: Union[USB, Serial]
+    if connection == "usb":
+      self.io = USB(
+        human_readable_device_name="Tecan EVO",
+        packet_read_timeout=packet_read_timeout,
+        read_timeout=read_timeout,
+        write_timeout=write_timeout,
+        id_vendor=0x0C47,
+        id_product=0x4000,
+      )
+    else:
+      serial_kwargs = dict(
+        human_readable_device_name="Tecan EVO",
+        baudrate=serial_baudrate,
+        write_timeout=write_timeout,
+        timeout=packet_read_timeout,
+      )
+      if serial_port is not None:
+        self.io = Serial(port=serial_port, **serial_kwargs)
+      else:
+        self.io = Serial(vid=_DEFAULT_SERIAL_VID, pid=_DEFAULT_SERIAL_PID, **serial_kwargs)
 
     self._cache: Dict[str, List[Optional[int]]] = {}
 
@@ -158,12 +196,35 @@ class TecanLiquidHandler(LiquidHandlerBackend, metaclass=ABCMeta):
 
     cmd = self._assemble_command(module, command, [] if params is None else params)
 
-    await self.io.write(cmd.encode(), timeout=write_timeout)
+    if isinstance(self.io, USB):
+      await self.io.write(cmd.encode(), timeout=write_timeout)
+    else:
+      await self.io.write(cmd.encode())
     if not wait:
       return None
 
-    resp = await self.io.read(timeout=read_timeout)
+    if isinstance(self.io, USB):
+      resp = await self.io.read(timeout=read_timeout)
+    else:
+      resp = await self._read_serial_frame(timeout=read_timeout)
     return self.parse_response(resp)
+
+  async def _read_serial_frame(self, timeout: Optional[int]) -> bytes:
+    """Accumulate bytes from `self.io` (a `Serial`) up to and including the next
+    `_FRAME_TERMINATOR`, since a raw serial stream — unlike USB bulk transfers — has no
+    built-in message framing.
+    """
+    assert isinstance(self.io, Serial)
+    deadline = time.monotonic() + (timeout if timeout is not None else self._read_timeout)
+    buf = bytearray()
+    while time.monotonic() < deadline:
+      chunk = await self.io.read(1)
+      if not chunk:
+        continue
+      buf += chunk
+      if buf.endswith(_FRAME_TERMINATOR):
+        return bytes(buf)
+    raise TimeoutError(f"Timeout while reading from Tecan EVO on serial port '{self.io.port}'.")
 
   async def setup(self):
     await super().setup()
@@ -193,6 +254,9 @@ class EVOBackend(TecanLiquidHandler):
     packet_read_timeout: int = 12,
     read_timeout: int = 60,
     write_timeout: int = 60,
+    connection: Literal["usb", "serial"] = "usb",
+    serial_port: Optional[str] = None,
+    serial_baudrate: int = 9600,
   ):
     """Create a new EVO interface.
 
@@ -200,12 +264,20 @@ class EVOBackend(TecanLiquidHandler):
       packet_read_timeout: timeout in seconds for reading a single packet.
       read_timeout: timeout in seconds for reading a full response.
       write_timeout: timeout in seconds for writing a command.
+      connection: "usb" for a native USB connection, "serial" for a direct RS232 link (or one
+        made through a USB-to-serial adapter).
+      serial_port: Explicit serial port path, used only when `connection="serial"`. If
+        omitted, the port is auto-detected from the adapter's VID/PID.
+      serial_baudrate: Baud rate to use when `connection="serial"`.
     """
 
     super().__init__(
       packet_read_timeout=packet_read_timeout,
       read_timeout=read_timeout,
       write_timeout=write_timeout,
+      connection=connection,
+      serial_port=serial_port,
+      serial_baudrate=serial_baudrate,
     )
 
     self._num_channels: Optional[int] = None
