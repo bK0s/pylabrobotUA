@@ -355,44 +355,54 @@ class EVOBackend(TecanLiquidHandler):
 
     await super().setup()
 
+    # PIA (presence check / initialize command): PnP, LiHa, (MCA), RoMa
     self._pnp_connected = await self.setup_arm(EVOBackend.PNP)
     self._liha_connected = await self.setup_arm(EVOBackend.LIHA)
     self._mca_connected = await self.setup_arm(EVOBackend.MCA) if self._has_mca else False
     self._roma_connected = await self.setup_arm(EVOBackend.ROMA)
 
-    if self.roma_connected:  # position_initialization_x in reverse order from setup_arm
+    if self.roma_connected:
       self.roma = RoMa(self, EVOBackend.ROMA)
-      await self.roma.position_initialization_x()
-      # move to home position (TBD) after initialization
-      await self._park_roma()
     if self.mca_connected:
       self.mca = Mca(self, EVOBackend.MCA)
-      # await self.mca.position_initialization_x() # function does not work for mca.
-      await self._park_mca()
-
     if self.liha_connected:
       self.liha = LiHa(self, EVOBackend.LIHA)
-      await self.liha.position_initialization_x()
-
     if self.pnp_connected:
       self.pnp = PnP(self, EVOBackend.PNP)
+
+    # position_initialization_x in reverse order from PIA: RoMa, LiHa, PnP
+    if self.roma_connected:
+      await self.roma.position_initialization_x()
+    if self.liha_connected:
+      await self.liha.position_initialization_x()
+    if self.pnp_connected:
       await self.pnp.position_initialization_x()
+    # (MCA's position_initialization_x is skipped: function does not work for mca.)
 
     self._num_channels = await self.liha.report_number_tips()
     self._x_range = await self.liha.report_x_param(5)
     self._y_range = (await self.liha.report_y_param(5))[0]
     self._z_range = (await self.liha.report_z_param(5))[0]
 
-    # Initialize plungers. Assumes wash station assigned at rail 1.
-    await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
-    await self.liha.position_absolute_all_axis(45, 1031, 90, [1200] * self.num_channels)
-    await self.liha.initialize_plunger(self._bin_use_channels(list(range(self.num_channels))))
-    await self.liha.position_valve_logical([1] * self.num_channels)
-    await self.liha.move_plunger_relative([100] * self.num_channels)
-    await self.liha.position_valve_logical([0] * self.num_channels)
-    await self.liha.set_end_speed_plunger([1800] * self.num_channels)
-    await self.liha.move_plunger_relative([-100] * self.num_channels)
-    await self.liha.position_absolute_all_axis(45, 1031, 90, [self._z_range] * self.num_channels)
+    # Move each arm to its home/park position: RoMa, LiHa, PnP
+    if self.roma_connected:
+      await self._park_roma()
+    if self.mca_connected:
+      await self._park_mca()
+    if self.liha_connected:
+      # Initialize plungers at a safe intermediate height before parking.
+      # Wash station is assigned at rail 38.
+      await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
+      await self.liha.position_absolute_all_axis(9250, 1031, 90, [1200] * self.num_channels)
+      await self.liha.initialize_plunger(self._bin_use_channels(list(range(self.num_channels))))
+      await self.liha.position_valve_logical([1] * self.num_channels)
+      await self.liha.move_plunger_relative([100] * self.num_channels)
+      await self.liha.position_valve_logical([0] * self.num_channels)
+      await self.liha.set_end_speed_plunger([1800] * self.num_channels)
+      await self.liha.move_plunger_relative([-100] * self.num_channels)
+      await self._park_liha()
+    if self.pnp_connected:
+      await self._park_pnp()
 
   async def setup_arm(self, module):
     try:
@@ -412,10 +422,10 @@ class EVOBackend(TecanLiquidHandler):
 
   async def _park_liha(self):
     await self.liha.set_z_travel_height([self._z_range] * self.num_channels)
-    await self.liha.position_absolute_all_axis(45, 1031, 90, [self._z_range] * self.num_channels)
+    await self.liha.position_absolute_all_axis(9250, 1031, 90, [self._z_range] * self.num_channels)
 
   async def _park_roma(self):
-    await self.roma.set_vector_coordinate_position(1, 9000, 2000, 2464, 1800, None, 1, 0)
+    await self.roma.set_vector_coordinate_position(1, 14000, 2000, 2464, 1800, None, 1, 0)
     await self.roma.action_move_vector_coordinate_position()
 
   async def _park_mca(self):
@@ -439,8 +449,9 @@ class EVOBackend(TecanLiquidHandler):
     await asyncio.sleep(0.5)
 
   async def _park_pnp(self):
-    await self.pnp.set_z_travel_height(self._z_range)
-    await self.pnp.position_absolute_all(-100, -700, z=None, r=0, g=280)
+    pnp_z_range = await self.pnp.report_z_param(5)
+    await self.pnp.position_absolute_z(pnp_z_range)
+    await self.pnp.position_absolute_all(2750, 2000, z=None, r=0, g=280)
 
   # ============== LiquidHandlerBackend methods ==============
 
