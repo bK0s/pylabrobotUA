@@ -1746,8 +1746,9 @@ class DecapRail(EVOArm):
     return resp["data"][0]
 
   async def set_output(self, pin: int, value: int):
-    """Set output pin on or off. pin=1 controls the pneumatic slide valve."""
-    await self.backend.send_command(module=self.module, command="SS0", params=[pin, value])
+    """Set output pin on or off. pin=1 controls the pneumatic slide valve,
+    pin=5 controls the main air valve."""
+    await self.backend.send_command(module=self.module, command="SSO", params=[pin, value])
 
   async def extend_slide_valve(self):
     """Extend slide valve — clamps tube in position."""
